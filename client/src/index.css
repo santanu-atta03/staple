@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500&family=Space+Mono&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@layer base {
+  body {
+    @apply bg-neutral-950 text-neutral-100 antialiased selection:bg-white selection:text-neutral-950;
+  }
+}
+
+
+:root {
+  font-family: Inter, sans-serif;
+  color: #171719;
+  background: #fbfaf7;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #fbfaf7;
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+  font-family: inherit;
+}
+
+button:focus-visible {
+  outline: 2px solid #4c6ee6;
+  outline-offset: 2px;
+}
+
+.font-mono {
+  font-family: "Space Mono", monospace;
+}
