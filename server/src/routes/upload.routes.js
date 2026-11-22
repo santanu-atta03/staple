@@ -1,9 +1,27 @@
 const router = require("express").Router();
-const authMiddleware = require("../middleware/auth.middleware");
+const fs = require("fs");
+const path = require("path");
 const upload = require("../middleware/upload.middleware");
 const cloudinary = require("../config/cloudinary");
+const store = require("../config/store");
 
-const uploadBufferToCloudinary = (buffer, folder) =>
+// Helper to check if real Cloudinary credentials are provided
+const isCloudinaryConfigured = () => {
+  const name = process.env.CLOUDINARY_CLOUD_NAME;
+  const key = process.env.CLOUDINARY_API_KEY;
+  const secret = process.env.CLOUDINARY_API_SECRET;
+  return (
+    name &&
+    name !== "your_cloud_name" &&
+    key &&
+    key !== "your_api_key" &&
+    secret &&
+    secret !== "your_api_secret"
+  );
+};
+
+// Cloudinary Stream Upload
+const uploadBufferToCloudinary = (buffer, folder = "staple_uploads") =>
   new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       { folder, resource_type: "auto" },
@@ -15,34 +33,65 @@ const uploadBufferToCloudinary = (buffer, folder) =>
     stream.end(buffer);
   });
 
-// Upload single avatar or multiple post attachments (up to 4)
+// Save locally as reliable fallback
+const saveBufferLocally = (file) => {
+  const uploadDir = path.join(__dirname, "../../../client/public/uploads");
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+
+  const ext = path.extname(file.originalname) || (file.mimetype.includes("video") ? ".mp4" : ".jpg");
+  const fileName = `upload_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${ext}`;
+  const filePath = path.join(uploadDir, fileName);
+
+  fs.writeFileSync(filePath, file.buffer);
+
+  return {
+    url: `/uploads/${fileName}`,
+    publicId: fileName,
+    type: file.mimetype.startsWith("video/") ? "video" : "image",
+  };
+};
+
+// Upload multiple files or single file
 router.post(
   "/",
-  authMiddleware,
-  upload.array("files", 4),
+  upload.array("files", 10),
   async (req, res, next) => {
     try {
       if (!req.files || !req.files.length) {
-        const err = new Error("No files uploaded");
-        err.statusCode = 400;
-        throw err;
+        return res.status(400).json({ success: false, message: "No files uploaded" });
       }
 
-      const uploads = await Promise.all(
-        req.files.map((file) =>
-          uploadBufferToCloudinary(file.buffer, "staple_uploads")
-        )
-      );
+      const media = [];
 
-      const media = uploads.map((u) => ({
-        url: u.secure_url,
-        publicId: u.public_id,
-        type: u.resource_type,
-      }));
+      for (const file of req.files) {
+        if (isCloudinaryConfigured()) {
+          try {
+            const result = await uploadBufferToCloudinary(file.buffer, "staple_uploads");
+            media.push({
+              url: result.secure_url,
+              publicId: result.public_id,
+              type: result.resource_type === "video" ? "video" : "image",
+              width: result.width,
+              height: result.height,
+              format: result.format,
+            });
+            continue;
+          } catch (cloudErr) {
+            console.warn("Cloudinary upload failed, falling back to local storage:", cloudErr.message);
+          }
+        }
+
+        // Fallback or default local save
+        const localResult = saveBufferLocally(file);
+        media.push(localResult);
+      }
 
       res.status(201).json({ success: true, media });
     } catch (err) {
-      next(err);
+      console.error("Upload error:", err);
+      res.status(500).json({ success: false, message: err.message || "Failed to upload file" });
     }
   }
 );

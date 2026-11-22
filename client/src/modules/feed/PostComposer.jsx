@@ -14,56 +14,65 @@ export default function PostComposer({ onPostCreated }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const handleFileChange = (e) => {
-    const selected = Array.from(e.target.files || []).slice(0, 4 - files.length);
+  const handleFileChange = (event) => {
+    const selected = Array.from(event.target.files || []).slice(
+      0,
+      4 - files.length,
+    );
+
     if (!selected.length) return;
 
-    setFiles((prev) => [...prev, ...selected]);
-    const newPreviews = selected.map((file) => ({
-      url: URL.createObjectURL(file),
-      type: file.type.startsWith("video/") ? "video" : "image",
-    }));
-    setPreviews((prev) => [...prev, ...newPreviews]);
-    e.target.value = "";
+    setFiles((current) => [...current, ...selected]);
+
+    setPreviews((current) => [
+      ...current,
+      ...selected.map((file) => ({
+        url: URL.createObjectURL(file),
+        type: file.type.startsWith("video/") ? "video" : "image",
+      })),
+    ]);
+
+    event.target.value = "";
   };
 
   const removeAttachment = (index) => {
     URL.revokeObjectURL(previews[index].url);
-    setFiles((prev) => prev.filter((_, i) => i !== index));
-    setPreviews((prev) => prev.filter((_, i) => i !== index));
+    setFiles((current) => current.filter((_, i) => i !== index));
+    setPreviews((current) => current.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
     if (!content.trim() && files.length === 0) return;
 
     setSubmitting(true);
     setError("");
-    try {
-      let uploadedMedia = [];
-      if (files.length > 0) {
-        uploadedMedia = await uploadMediaFiles(files);
-      }
 
-      const newPost = await createNewPost({
+    try {
+      const media = files.length ? await uploadMediaFiles(files) : [];
+
+      const post = await createNewPost({
         content: content.trim(),
-        media: uploadedMedia,
+        media,
       });
 
-      // Hydrate default feed counters for instant local render
       onPostCreated({
-        ...newPost,
+        ...post,
         isLiked: false,
         likeCount: 0,
         commentCount: 0,
       });
 
+      previews.forEach((preview) => URL.revokeObjectURL(preview.url));
       setContent("");
-      previews.forEach((p) => URL.revokeObjectURL(p.url));
       setFiles([]);
       setPreviews([]);
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to publish post");
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          "Failed to publish post.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -72,91 +81,92 @@ export default function PostComposer({ onPostCreated }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="border-b border-neutral-800/70 px-4 py-4 sm:px-6"
+      className="mb-4 rounded-[22px] border border-[#f2f2f2] bg-white px-4 py-3"
     >
-      <div className="flex gap-3.5">
+      <div className="flex items-center gap-2">
         <img
           src={
             user?.avatar ||
             `https://api.dicebear.com/9.x/initials/svg?seed=${user?.username}`
           }
           alt={user?.username}
-          className="h-10 w-10 shrink-0 rounded-full object-cover bg-neutral-800"
+          className="h-8 w-8 rounded-full bg-[#e8e5df] object-cover"
         />
 
-        <div className="min-w-0 flex-1 space-y-3">
-          <textarea
-            rows={2}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Share a thought, snippet, or update..."
-            className="w-full resize-none bg-transparent text-sm text-white placeholder-neutral-500 outline-none sm:text-base"
-          />
+        <textarea
+          rows={1}
+          data-post-composer
+          value={content}
+          onChange={(event) => setContent(event.target.value)}
+          placeholder={`What's on your mind, ${
+            user?.name?.split(" ")[0] || user?.username || "there"
+          }?`}
+          className="h-9 flex-1 resize-none rounded-full bg-[#f3f1ed] px-4 py-[9px] text-[11px] outline-none focus:ring-1 focus:ring-[#9b60aa]"
+        />
+      </div>
 
-          {previews.length > 0 && (
-            <div className="grid grid-cols-2 gap-2">
-              {previews.map((item, idx) => (
-                <div
-                  key={item.url}
-                  className="relative overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900"
-                >
-                  {item.type === "video" ? (
-                    <video
-                      src={item.url}
-                      className="h-40 w-full object-cover"
-                      controls
-                    />
-                  ) : (
-                    <img
-                      src={item.url}
-                      alt="Attachment preview"
-                      className="h-40 w-full object-cover"
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => removeAttachment(idx)}
-                    className="absolute top-2 right-2 rounded-full bg-neutral-950/80 p-1 text-neutral-200 hover:bg-neutral-900"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+      {previews.length > 0 && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {previews.map((preview, index) => (
+            <div
+              key={preview.url}
+              className="relative overflow-hidden rounded-xl border border-[#e5e7eb]"
+            >
+              {preview.type === "video" ? (
+                <video
+                  src={preview.url}
+                  controls
+                  className="h-40 w-full object-cover"
+                />
+              ) : (
+                <img
+                  src={preview.url}
+                  alt="Preview"
+                  className="h-40 w-full object-cover"
+                />
+              )}
 
-          {error && <p className="text-xs text-rose-400">{error}</p>}
-
-          <div className="flex items-center justify-between border-t border-neutral-800/60 pt-3">
-            <div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,video/*"
-                multiple
-                onChange={handleFileChange}
-                className="hidden"
-              />
               <button
                 type="button"
-                disabled={files.length >= 4 || submitting}
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-neutral-400 transition hover:bg-neutral-900 hover:text-white disabled:opacity-40"
+                onClick={() => removeAttachment(index)}
+                className="absolute right-2 top-2 rounded-full bg-black/80 p-1 text-white"
               >
-                <ImagePlus className="h-4 w-4" />
-                <span>Media ({files.length}/4)</span>
+                <X className="h-4 w-4" />
               </button>
             </div>
-
-            <RollButton
-              type="submit"
-              disabled={submitting || (!content.trim() && files.length === 0)}
-              className="px-4 py-1.5 text-xs"
-            >
-              {submitting ? "Posting..." : "Post"}
-            </RollButton>
-          </div>
+          ))}
         </div>
+      )}
+
+      {error && <p className="mt-2 text-xs text-[#b30000]">{error}</p>}
+
+      <div className="mt-3 flex items-center justify-between border-t border-[#eeeae2] pt-3">
+        <button
+          type="button"
+          disabled={files.length >= 4 || submitting}
+          onClick={() => fileInputRef.current?.click()}
+          className="flex items-center gap-2 rounded-lg px-2 py-1 text-[10px] text-[#616161]"
+        >
+          <ImagePlus className="h-4 w-4" />
+          Media ({files.length}/4)
+        </button>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
+        <RollButton
+          type="submit"
+          disabled={submitting || (!content.trim() && files.length === 0)}
+          className="bg-black px-4 py-1.5 text-xs text-white"
+        >
+          {submitting ? "Posting..." : "Post"}
+        </RollButton>
       </div>
     </form>
   );

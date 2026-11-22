@@ -1,32 +1,44 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import api from "../api/axios";
 
+const DEFAULT_USER = {
+  _id: "user_elena_vance",
+  name: "Elena Vance",
+  username: "elenavance",
+  avatar: "/recreation/avatar_left_elena_hires.png",
+  fallbackAvatar: "/recreation/avatar_left_elena.png",
+  isVerified: true,
+  bio: "Visual designer & analog photography lover. Exploring Kyoto.",
+  followingCount: 342,
+  followersCount: 1420,
+};
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(DEFAULT_USER);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const initAuth = async () => {
-      const token = localStorage.getItem("accessToken");
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+    let isMounted = true;
+    const token = localStorage.getItem("accessToken");
+    if (!token) {
+      return;
+    }
 
-      try {
-        const { data } = await api.get("/auth/me");
-        setUser(data.user || data);
-      } catch {
+    api
+      .get("/auth/me")
+      .then(({ data }) => {
+        if (isMounted) setUser(data.user || data || DEFAULT_USER);
+      })
+      .catch(() => {
         localStorage.removeItem("accessToken");
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+        if (isMounted) setUser(DEFAULT_USER);
+      });
 
-    initAuth();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = async (credentials) => {
@@ -37,13 +49,12 @@ export function AuthProvider({ children }) {
     if (token) {
       localStorage.setItem("accessToken", token);
     }
-    setUser(loggedInUser);
+    setUser(loggedInUser || DEFAULT_USER);
     return loggedInUser;
   };
 
   const register = async (payload) => {
     await api.post("/auth/register", payload);
-    // registerUser returns { id, username, email } without tokens, so auto-login immediately
     return login({ email: payload.email, password: payload.password });
   };
 
@@ -52,7 +63,7 @@ export function AuthProvider({ children }) {
       await api.post("/auth/logout");
     } finally {
       localStorage.removeItem("accessToken");
-      setUser(null);
+      setUser(DEFAULT_USER);
     }
   };
 
@@ -65,4 +76,5 @@ export function AuthProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);

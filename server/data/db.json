@@ -1,0 +1,168 @@
+{
+  "posts": [
+    {
+      "_id": "post_1795281218029",
+      "authorId": {
+        "_id": "user_elena_vance",
+        "name": "Elena Vance",
+        "username": "elenavance",
+        "avatar": "/recreation/avatar_left_elena_hires.png",
+        "fallbackAvatar": "/recreation/avatar_left_elena.png",
+        "isVerified": true
+      },
+      "time": "Just now",
+      "location": "Kyoto, Japan",
+      "visibility": "public",
+      "content": "Exploring concrete architecture and foggy light in Kyoto. #photography #brutalism",
+      "tags": [
+        "#photography",
+        "#brutalism"
+      ],
+      "media": [
+        {
+          "url": "/profile/post_1_kyoto_lanterns.png",
+          "badge": "Leica M6"
+        }
+      ],
+      "isLiked": false,
+      "likesCount": 0,
+      "isSaved": true,
+      "commentsCount": 1,
+      "comments": [
+        {
+          "_id": "comm_1795281218070",
+          "author": {
+            "name": "Elena Vance",
+            "username": "elenavance",
+            "avatar": "/recreation/avatar_left_elena_hires.png"
+          },
+          "content": "Stunning mood and contrast! Love the depth.",
+          "createdAt": "Just now",
+          "replies": []
+        }
+      ],
+      "type": "media",
+      "tab": "for-you",
+      "createdAt": "2026-11-21T17:13:38.029Z"
+    },
+    {
+      "_id": "post_1795281017757",
+      "authorId": {
+        "_id": "user_elena_vance",
+        "name": "Elena Vance",
+        "username": "elenavance",
+        "avatar": "/recreation/avatar_left_elena_hires.png",
+        "fallbackAvatar": "/recreation/avatar_left_elena.png",
+        "isVerified": true
+      },
+      "time": "Just now",
+      "location": "",
+      "visibility": "close_friends",
+      "content": "gtss",
+      "tags": [
+        "#hgdhgd"
+      ],
+      "media": [],
+      "isLiked": true,
+      "likesCount": 1,
+      "isSaved": true,
+      "commentsCount": 1,
+      "comments": [
+        {
+          "_id": "comm_1795281028858",
+          "author": {
+            "name": "Elena Vance",
+            "username": "elenavance",
+            "avatar": "/recreation/avatar_left_elena_hires.png"
+          },
+          "content": "tddt",
+          "createdAt": "Just now",
+          "replies": []
+        }
+      ],
+      "type": "standard",
+      "tab": "for-you",
+      "createdAt": "2026-11-21T17:10:17.757Z"
+    }
+  ],
+  "stories": [
+    {
+      "id": "your-story",
+      "name": "Your story",
+      "avatar": "/recreation/avatar_elena_hires.png",
+      "fallback": "/recreation/avatar_elena.png",
+      "isYours": true
+    }
+  ],
+  "following": [],
+  "bookmarks": [
+    "post_1795281017757",
+    "post_1795281218029"
+  ],
+  "drafts": [],
+  "currentUser": {
+    "_id": "user_elena_vance",
+    "name": "Elena Vance",
+    "username": "elenavance",
+    "avatar": "/recreation/avatar_left_elena_hires.png",
+    "fallbackAvatar": "/recreation/avatar_left_elena.png",
+    "isVerified": true,
+    "roleTag": "Creative Vanguard",
+    "pronouns": "she/her",
+    "bio": "Visual designer & analog photography lover. Exploring Kyoto.",
+    "website": "https://elenavance.design",
+    "location": "San Francisco, CA & Tokyo, JP",
+    "joined": "Joined Staple March 2024",
+    "followingCount": 0,
+    "followersCount": 0,
+    "postsCount": 2
+  },
+  "people": [
+    {
+      "id": "marcus",
+      "name": "Marcus Chen",
+      "username": "marcus_v",
+      "avatar": "/recreation/avatar_marcus_hires.png",
+      "fallback": "/recreation/avatar_marcus.png",
+      "isVerified": true,
+      "subtitle": "14 mutual friends",
+      "isFollowing": false
+    },
+    {
+      "id": "sarah",
+      "name": "Sarah Lin",
+      "username": "sarah_lin",
+      "avatar": "/recreation/avatar_sarah_lin_hires.png",
+      "fallback": "/recreation/avatar_sarah_lin.png",
+      "isVerified": false,
+      "subtitle": "8 mutual friends",
+      "isFollowing": false
+    },
+    {
+      "id": "karan",
+      "name": "Karan Varma",
+      "username": "karan.v",
+      "avatar": null,
+      "initials": "KV",
+      "isVerified": true,
+      "subtitle": "Suggested creator",
+      "isFollowing": false
+    }
+  ],
+  "groups": [
+    {
+      "id": "photo",
+      "name": "Film Photography Club",
+      "members": "18.4K members • 12 posts/day",
+      "joined": true,
+      "icon": "camera"
+    },
+    {
+      "id": "hikers",
+      "name": "Urban Hikers & Explorers",
+      "members": "9.2K members • 8 friends are in",
+      "joined": false,
+      "icon": "footprints"
+    }
+  ]
+}
