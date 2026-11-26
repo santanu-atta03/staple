@@ -1,168 +1,600 @@
 {
-  "posts": [
-    {
-      "_id": "post_1795281218029",
-      "authorId": {
-        "_id": "user_elena_vance",
-        "name": "Elena Vance",
-        "username": "elenavance",
-        "avatar": "/recreation/avatar_left_elena_hires.png",
-        "fallbackAvatar": "/recreation/avatar_left_elena.png",
-        "isVerified": true
-      },
-      "time": "Just now",
-      "location": "Kyoto, Japan",
-      "visibility": "public",
-      "content": "Exploring concrete architecture and foggy light in Kyoto. #photography #brutalism",
-      "tags": [
-        "#photography",
-        "#brutalism"
-      ],
-      "media": [
-        {
-          "url": "/profile/post_1_kyoto_lanterns.png",
-          "badge": "Leica M6"
-        }
-      ],
-      "isLiked": false,
-      "likesCount": 0,
-      "isSaved": true,
-      "commentsCount": 1,
-      "comments": [
-        {
-          "_id": "comm_1795281218070",
-          "author": {
-            "name": "Elena Vance",
-            "username": "elenavance",
-            "avatar": "/recreation/avatar_left_elena_hires.png"
-          },
-          "content": "Stunning mood and contrast! Love the depth.",
-          "createdAt": "Just now",
-          "replies": []
-        }
-      ],
-      "type": "media",
-      "tab": "for-you",
-      "createdAt": "2026-11-21T17:13:38.029Z"
-    },
-    {
-      "_id": "post_1795281017757",
-      "authorId": {
-        "_id": "user_elena_vance",
-        "name": "Elena Vance",
-        "username": "elenavance",
-        "avatar": "/recreation/avatar_left_elena_hires.png",
-        "fallbackAvatar": "/recreation/avatar_left_elena.png",
-        "isVerified": true
-      },
-      "time": "Just now",
-      "location": "",
-      "visibility": "close_friends",
-      "content": "gtss",
-      "tags": [
-        "#hgdhgd"
-      ],
-      "media": [],
-      "isLiked": true,
-      "likesCount": 1,
-      "isSaved": true,
-      "commentsCount": 1,
-      "comments": [
-        {
-          "_id": "comm_1795281028858",
-          "author": {
-            "name": "Elena Vance",
-            "username": "elenavance",
-            "avatar": "/recreation/avatar_left_elena_hires.png"
-          },
-          "content": "tddt",
-          "createdAt": "Just now",
-          "replies": []
-        }
-      ],
-      "type": "standard",
-      "tab": "for-you",
-      "createdAt": "2026-11-21T17:10:17.757Z"
-    }
-  ],
-  "stories": [
-    {
-      "id": "your-story",
-      "name": "Your story",
-      "avatar": "/recreation/avatar_elena_hires.png",
-      "fallback": "/recreation/avatar_elena.png",
-      "isYours": true
-    }
-  ],
+  "posts": [],
+  "stories": [],
   "following": [],
-  "bookmarks": [
-    "post_1795281017757",
-    "post_1795281218029"
-  ],
+  "bookmarks": [],
   "drafts": [],
-  "currentUser": {
-    "_id": "user_elena_vance",
-    "name": "Elena Vance",
-    "username": "elenavance",
-    "avatar": "/recreation/avatar_left_elena_hires.png",
-    "fallbackAvatar": "/recreation/avatar_left_elena.png",
-    "isVerified": true,
-    "roleTag": "Creative Vanguard",
-    "pronouns": "she/her",
-    "bio": "Visual designer & analog photography lover. Exploring Kyoto.",
-    "website": "https://elenavance.design",
-    "location": "San Francisco, CA & Tokyo, JP",
-    "joined": "Joined Staple March 2024",
-    "followingCount": 0,
-    "followersCount": 0,
-    "postsCount": 2
+  "notifications": [],
+  "notificationSidebar": {
+    "friendRequests": [],
+    "birthdays": [],
+    "suggestedFriends": []
   },
-  "people": [
+  "notes": [],
+  "conversations": [],
+  "currentUser": null,
+  "legacyCurrentUser": null,
+  "settings": {},
+  "highlights": [],
+  "profilePosts": [],
+  "people": [],
+  "groups": [],
+  "explorePosts": [],
+  "audioTrends": [],
+  "creators": [],
+  "communities": [],
+  "users": [
     {
-      "id": "marcus",
-      "name": "Marcus Chen",
-      "username": "marcus_v",
-      "avatar": "/recreation/avatar_marcus_hires.png",
-      "fallback": "/recreation/avatar_marcus.png",
-      "isVerified": true,
-      "subtitle": "14 mutual friends",
-      "isFollowing": false
+      "_id": "user_1795588879513",
+      "id": "user_1795588879513",
+      "username": "stresrts",
+      "email": "dxx@gmail.com",
+      "name": "tdfs",
+      "passwordHash": "$argon2id$v=19$m=65536,t=3,p=4$WFQI3YH0qCTyACEqovB5Pw$LxluzEvyNGDIgozZDuMKDUkiEReCkqosWpO72C6SU7s",
+      "avatar": "/recreation/avatar_left_elena_hires.png",
+      "fallbackAvatar": "/recreation/avatar_left_elena.png",
+      "roleTag": "Curator",
+      "pronouns": "they/them",
+      "bio": "Visual curator and creator on Staple.",
+      "website": "",
+      "location": "San Francisco, CA",
+      "joined": "Joined Staple November 2026",
+      "cover": "/profile/clean_cover.png",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0,
+      "createdAt": "2026-11-25T06:41:19.548Z"
     },
     {
-      "id": "sarah",
-      "name": "Sarah Lin",
-      "username": "sarah_lin",
-      "avatar": "/recreation/avatar_sarah_lin_hires.png",
-      "fallback": "/recreation/avatar_sarah_lin.png",
-      "isVerified": false,
-      "subtitle": "8 mutual friends",
-      "isFollowing": false
+      "_id": "user_apple_1795588173562",
+      "id": "user_apple_1795588173562",
+      "username": "testappleuser",
+      "email": "test.apple.user@icloud.com",
+      "name": "Apple ID User",
+      "avatar": "https://api.dicebear.com/9.x/initials/svg?seed=testappleuser",
+      "fallbackAvatar": "https://api.dicebear.com/9.x/initials/svg?seed=testappleuser",
+      "roleTag": "Apple Verified",
+      "pronouns": "they/them",
+      "bio": "Curator on Staple. Authenticated with Apple ID.",
+      "website": "",
+      "location": "Global",
+      "joined": "Joined Staple November 2026",
+      "cover": "/profile/clean_cover.png",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0,
+      "createdAt": "2026-11-25T06:29:33.562Z"
     },
     {
-      "id": "karan",
-      "name": "Karan Varma",
-      "username": "karan.v",
-      "avatar": null,
-      "initials": "KV",
-      "isVerified": true,
-      "subtitle": "Suggested creator",
-      "isFollowing": false
+      "_id": "user_g_1795588173541",
+      "id": "user_g_1795588173541",
+      "username": "testgoogleuser",
+      "email": "test.google.user@gmail.com",
+      "name": "test.google.user",
+      "avatar": "https://api.dicebear.com/9.x/initials/svg?seed=testgoogleuser",
+      "fallbackAvatar": "https://api.dicebear.com/9.x/initials/svg?seed=testgoogleuser",
+      "roleTag": "Google Verified",
+      "pronouns": "they/them",
+      "bio": "Curator on Staple. Authenticated with Google.",
+      "website": "",
+      "location": "Global",
+      "joined": "Joined Staple November 2026",
+      "cover": "/profile/clean_cover.png",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0,
+      "createdAt": "2026-11-25T06:29:33.555Z"
+    },
+    {
+      "_id": "user_1795588155867",
+      "id": "user_1795588155867",
+      "username": "real_155773",
+      "email": "realuser_1795588155773@example.com",
+      "name": "Real Test User",
+      "passwordHash": "$argon2id$v=19$m=65536,t=3,p=4$HNunOT8E9QSNbNTgCzA8bA$LjdLdd2NFpKNnBHFi8jPLB2lXzza0Cus2XMdhU84uBs",
+      "avatar": "/recreation/avatar_left_elena_hires.png",
+      "fallbackAvatar": "/recreation/avatar_left_elena.png",
+      "roleTag": "Curator",
+      "pronouns": "they/them",
+      "bio": "Visual curator and creator on Staple.",
+      "website": "",
+      "location": "San Francisco, CA",
+      "joined": "Joined Staple November 2026",
+      "cover": "/profile/clean_cover.png",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0,
+      "createdAt": "2026-11-25T06:29:15.881Z"
+    },
+    {
+      "_id": "user_1795588125550",
+      "id": "user_1795588125550",
+      "username": "real_125406",
+      "email": "realuser_1795588125406@example.com",
+      "name": "Real Test User",
+      "passwordHash": "$argon2id$v=19$m=65536,t=3,p=4$80QFA7qBEQ87301zNAe3Cg$8QrHn0wjgYs6d+GRJ/wrP4hmj/R7u0RG9TB/fRSZ9x4",
+      "avatar": "/recreation/avatar_left_elena_hires.png",
+      "fallbackAvatar": "/recreation/avatar_left_elena.png",
+      "roleTag": "Curator",
+      "pronouns": "they/them",
+      "bio": "Visual curator and creator on Staple.",
+      "website": "",
+      "location": "San Francisco, CA",
+      "joined": "Joined Staple November 2026",
+      "cover": "/profile/clean_cover.png",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0,
+      "createdAt": "2026-11-25T06:28:45.592Z"
+    },
+    {
+      "_id": "user_1795533393600",
+      "id": "user_1795533393600",
+      "username": "creator_5542",
+      "email": "creator5542@visual.co",
+      "name": "Visual Creator 5542",
+      "passwordHash": "$argon2id$v=19$m=65536,t=3,p=4$M7eUCSY+OpnNqIg34UeOzA$ejogV1ECR3oliIjIGG7SuugdXyMhZ5Oh73cdcud8QLw",
+      "avatar": "/recreation/avatar_left_elena_hires.png",
+      "fallbackAvatar": "/recreation/avatar_left_elena.png",
+      "roleTag": "Curator",
+      "pronouns": "they/them",
+      "bio": "Visual curator and creator on Staple.",
+      "website": "",
+      "location": "San Francisco, CA",
+      "joined": "Joined Staple November 2026",
+      "cover": "/profile/clean_cover.png",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0,
+      "createdAt": "2026-11-24T15:16:33.600Z"
+    },
+    {
+      "_id": "user_apple_1795533393314",
+      "id": "user_apple_1795533393314",
+      "username": "alex_apple",
+      "email": "alex.apple@example.com",
+      "name": "Alex Apple",
+      "avatar": "/notifications/kai.png",
+      "fallbackAvatar": "/recreation/avatar_left_elena.png",
+      "roleTag": "Apple Verified",
+      "pronouns": "they/them",
+      "bio": "Verified apple creator and discourse curator on Staple.",
+      "website": "",
+      "location": "San Francisco, CA",
+      "joined": "Joined Staple November 2026",
+      "cover": "/profile/clean_cover.png",
+      "followingCount": 14,
+      "followersCount": 120,
+      "postsCount": 3,
+      "createdAt": "2026-11-24T15:16:33.314Z"
+    },
+    {
+      "_id": "user_google_1795533393243",
+      "id": "user_google_1795533393243",
+      "username": "alex_google",
+      "email": "alex.google@example.com",
+      "name": "Alex Google",
+      "avatar": "/notifications/sarah.png",
+      "fallbackAvatar": "/recreation/avatar_left_elena.png",
+      "roleTag": "Google Verified",
+      "pronouns": "they/them",
+      "bio": "Verified google creator and discourse curator on Staple.",
+      "website": "",
+      "location": "San Francisco, CA",
+      "joined": "Joined Staple November 2026",
+      "cover": "/profile/clean_cover.png",
+      "followingCount": 14,
+      "followersCount": 120,
+      "postsCount": 3,
+      "createdAt": "2026-11-24T15:16:33.306Z"
+    },
+    {
+      "_id": "user_1795531588029",
+      "username": "jordan_5537",
+      "email": "jordan5537@narrative.io",
+      "name": "Jordan Lee 5537",
+      "passwordHash": "$argon2id$v=19$m=65536,t=3,p=4$smR4bS95MYv1Ql7+YAPpGQ$0KL7GCaBcbZgivkJsyCcB9eIpWxzc3XiZaubGMoDgQY",
+      "avatar": "/recreation/avatar_left_elena_hires.png",
+      "fallbackAvatar": "/recreation/avatar_left_elena.png",
+      "roleTag": "Curator",
+      "pronouns": "they/them",
+      "bio": "Visual curator and creator on Staple.",
+      "website": "",
+      "location": "San Francisco, CA",
+      "joined": "Joined Staple November 2026",
+      "cover": "/profile/clean_cover.png",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0,
+      "createdAt": "2026-11-24T14:46:28.071Z"
+    },
+    {
+      "_id": "user_1795531529769",
+      "username": "jordan_3474",
+      "email": "jordan3474@narrative.io",
+      "name": "Jordan Lee 3474",
+      "passwordHash": "$argon2id$v=19$m=65536,t=3,p=4$bENS/btHHbG8c2odRTt7+g$/UvdEE3tbC1+8/JZXlNWOGjFxnNbJmJkmGhLVayvPe4",
+      "avatar": "/recreation/avatar_left_elena_hires.png",
+      "fallbackAvatar": "/recreation/avatar_left_elena.png",
+      "roleTag": "Curator",
+      "pronouns": "they/them",
+      "bio": "Visual curator and creator on Staple.",
+      "website": "",
+      "location": "San Francisco, CA",
+      "joined": "Joined Staple November 2026",
+      "cover": "/profile/clean_cover.png",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0,
+      "createdAt": "2026-11-24T14:45:29.792Z"
+    },
+    {
+      "_id": "user_1795530345963",
+      "username": "testuser_5786",
+      "email": "test5786@example.com",
+      "name": "Test User 5786",
+      "passwordHash": "$argon2id$v=19$m=65536,t=3,p=4$NppkCBC7pkp4+05/3lnSqQ$qiJGijF2icbi1tzyenskTvEOzdwKYRyayfzQW5+T9+8",
+      "avatar": "/recreation/avatar_left_elena_hires.png",
+      "fallbackAvatar": "/recreation/avatar_left_elena.png",
+      "roleTag": "Curator",
+      "pronouns": "they/them",
+      "bio": "Visual curator and creator on Staple.",
+      "website": "",
+      "location": "San Francisco, CA",
+      "joined": "Joined Staple November 2026",
+      "cover": "/profile/clean_cover.png",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0,
+      "createdAt": "2026-11-24T14:25:45.985Z"
+    },
+    {
+      "_id": "6b06c1ab44c4aad9172ba86c",
+      "id": "6b06c1ab44c4aad9172ba86c",
+      "username": "satt33376",
+      "email": "satt33376@gmail.com",
+      "name": "San Att",
+      "fullName": "San Att",
+      "avatar": "/default-avatar.svg",
+      "fallbackAvatar": "/default-avatar.svg",
+      "emailVerified": true,
+      "isPrivate": false,
+      "bio": "",
+      "website": "",
+      "location": "",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0,
+      "pronouns": "",
+      "cover": ""
+    },
+    {
+      "_id": "6b06f639374d8c6aed83723c",
+      "id": "6b06f639374d8c6aed83723c",
+      "username": "sfdavg",
+      "email": "attm1266@gmail.com",
+      "name": "utyfftucdx",
+      "fullName": "utyfftucdx",
+      "avatar": "/default-avatar.svg",
+      "fallbackAvatar": "/default-avatar.svg",
+      "emailVerified": true,
+      "isPrivate": false,
+      "bio": "",
+      "website": "",
+      "location": "",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0,
+      "pronouns": "",
+      "cover": ""
     }
   ],
-  "groups": [
-    {
-      "id": "photo",
-      "name": "Film Photography Club",
-      "members": "18.4K members • 12 posts/day",
-      "joined": true,
-      "icon": "camera"
+  "userSettings": {
+    "6b06c1ab44c4aad9172ba86c": {
+      "account": {
+        "email": "satt33376@gmail.com",
+        "phone": "",
+        "birthDate": "",
+        "twoFactorAuth": false,
+        "registeredKey": "None configured",
+        "sessions": [
+          {
+            "id": "sess_1795604907580",
+            "device": "Browser Session",
+            "location": "Local",
+            "time": "Active this session",
+            "isCurrent": true,
+            "type": "laptop"
+          }
+        ]
+      },
+      "profile": {
+        "displayName": "San Att",
+        "username": "satt33376",
+        "pronouns": "they/them",
+        "bio": "",
+        "website": "",
+        "location": "",
+        "roleTag": "Curator",
+        "showVerifiedBadge": false,
+        "showFollowerCount": true,
+        "showStudioSound": true,
+        "avatar": "/default-avatar.svg",
+        "cover": "/profile/clean_cover.png"
+      },
+      "privacy": {
+        "privateAccount": false,
+        "storyReplies": "everyone",
+        "activeStatus": true,
+        "readReceipts": true,
+        "blockedUsers": [],
+        "restrictedUsers": []
+      },
+      "notifications": {
+        "pushNotifications": true,
+        "emailNotifications": true,
+        "mentions": true,
+        "peerSignals": true,
+        "directMessages": true,
+        "storyReplies": true,
+        "pauseAll": false
+      },
+      "appearance": {
+        "theme": "editorial",
+        "fontSize": "standard",
+        "highContrastBorders": false,
+        "reduceAnimations": false
+      },
+      "content": {
+        "feedQuality": "lossless",
+        "losslessAudio": true,
+        "autoplayMedia": true,
+        "sensitiveContentFilter": false,
+        "mutedWords": []
+      },
+      "closeFriends": [],
+      "supportTickets": []
     },
-    {
-      "id": "hikers",
-      "name": "Urban Hikers & Explorers",
-      "members": "9.2K members • 8 friends are in",
-      "joined": false,
-      "icon": "footprints"
+    "6b06f639374d8c6aed83723c": {
+      "account": {
+        "email": "attm1266@gmail.com",
+        "phone": "",
+        "birthDate": "",
+        "twoFactorAuth": false,
+        "registeredKey": "None configured",
+        "sessions": [
+          {
+            "id": "sess_1795618361775",
+            "device": "Browser Session",
+            "location": "Local",
+            "time": "Active this session",
+            "isCurrent": true,
+            "type": "laptop"
+          }
+        ]
+      },
+      "profile": {
+        "displayName": "utyfftucdx",
+        "username": "sfdavg",
+        "pronouns": "",
+        "bio": "",
+        "website": "",
+        "location": "",
+        "roleTag": "",
+        "showVerifiedBadge": false,
+        "showFollowerCount": true,
+        "showStudioSound": true,
+        "avatar": "/default-avatar.svg",
+        "cover": ""
+      },
+      "privacy": {
+        "privateAccount": false,
+        "storyReplies": "everyone",
+        "activeStatus": true,
+        "readReceipts": true,
+        "blockedUsers": [],
+        "restrictedUsers": []
+      },
+      "notifications": {
+        "pushNotifications": true,
+        "emailNotifications": true,
+        "mentions": true,
+        "peerSignals": true,
+        "directMessages": true,
+        "storyReplies": true,
+        "pauseAll": false
+      },
+      "appearance": {
+        "theme": "editorial",
+        "fontSize": "standard",
+        "highContrastBorders": false,
+        "reduceAnimations": false
+      },
+      "content": {
+        "feedQuality": "lossless",
+        "losslessAudio": true,
+        "autoplayMedia": true,
+        "sensitiveContentFilter": false,
+        "mutedWords": []
+      },
+      "closeFriends": [],
+      "supportTickets": []
     }
-  ]
+  },
+  "userBookmarks": {
+    "6b06c1ab44c4aad9172ba86c": [],
+    "6b06f639374d8c6aed83723c": []
+  },
+  "userLikes": {
+    "6b06c1ab44c4aad9172ba86c": [],
+    "6b06f639374d8c6aed83723c": []
+  },
+  "userFollowing": {
+    "6b06c1ab44c4aad9172ba86c": [
+      "sfdavg",
+      "6b06f639374d8c6aed83723c"
+    ],
+    "6b06f639374d8c6aed83723c": [
+      "satt33376",
+      "6b06c1ab44c4aad9172ba86c"
+    ],
+    "default_user": []
+  },
+  "userHighlights": {
+    "6b06c1ab44c4aad9172ba86c": [],
+    "6b06f639374d8c6aed83723c": []
+  },
+  "userNotes": {
+    "6b06c1ab44c4aad9172ba86c": null,
+    "6b06f639374d8c6aed83723c": null
+  },
+  "userNotificationSidebars": {
+    "6b06c1ab44c4aad9172ba86c": {
+      "friendRequests": [
+        {
+          "id": "req_maya",
+          "name": "Maya Davis",
+          "subtitle": "12 mutual friends",
+          "avatar": "/notifications/maya.png",
+          "status": "pending"
+        }
+      ],
+      "birthdays": [
+        {
+          "id": "bday_lucas",
+          "name": "Lucas Vance",
+          "subtext": "Leave a message on his timeline",
+          "avatar": "/notifications/lucas.png",
+          "isWished": false
+        }
+      ],
+      "suggestedFriends": [
+        {
+          "id": "user_1795588879513",
+          "name": "tdfs",
+          "subtitle": "@stresrts",
+          "avatar": "/recreation/avatar_left_elena_hires.png",
+          "status": "idle"
+        },
+        {
+          "id": "user_apple_1795588173562",
+          "name": "Apple ID User",
+          "subtitle": "@testappleuser",
+          "avatar": "https://api.dicebear.com/9.x/initials/svg?seed=testappleuser",
+          "status": "idle"
+        },
+        {
+          "id": "user_g_1795588173541",
+          "name": "test.google.user",
+          "subtitle": "@testgoogleuser",
+          "avatar": "https://api.dicebear.com/9.x/initials/svg?seed=testgoogleuser",
+          "status": "idle"
+        },
+        {
+          "id": "user_1795588155867",
+          "name": "Real Test User",
+          "subtitle": "@real_155773",
+          "avatar": "/recreation/avatar_left_elena_hires.png",
+          "status": "idle"
+        },
+        {
+          "id": "user_1795588125550",
+          "name": "Real Test User",
+          "subtitle": "@real_125406",
+          "avatar": "/recreation/avatar_left_elena_hires.png",
+          "status": "idle"
+        },
+        {
+          "id": "sug_liam",
+          "name": "Liam Sterling",
+          "subtitle": "Followed by sarah_lin",
+          "avatar": "/notifications/liam.png",
+          "status": "idle"
+        },
+        {
+          "id": "sug_helene",
+          "name": "Hélène Moreau",
+          "subtitle": "8 mutual friends",
+          "avatar": "/notifications/helene.png",
+          "status": "idle"
+        }
+      ]
+    },
+    "6b06f639374d8c6aed83723c": {
+      "friendRequests": [],
+      "birthdays": [],
+      "suggestedFriends": []
+    },
+    "default_user": {
+      "friendRequests": [
+        {
+          "id": "req_maya",
+          "name": "Maya Davis",
+          "subtitle": "12 mutual friends",
+          "avatar": "/notifications/maya.png",
+          "status": "confirmed"
+        }
+      ],
+      "birthdays": [
+        {
+          "id": "bday_lucas",
+          "name": "Lucas Vance",
+          "subtext": "Leave a message on his timeline",
+          "avatar": "/notifications/lucas.png",
+          "isWished": true
+        }
+      ],
+      "suggestedFriends": [
+        {
+          "id": "user_1795588879513",
+          "name": "tdfs",
+          "subtitle": "@stresrts",
+          "avatar": "/recreation/avatar_left_elena_hires.png",
+          "status": "idle"
+        },
+        {
+          "id": "user_apple_1795588173562",
+          "name": "Apple ID User",
+          "subtitle": "@testappleuser",
+          "avatar": "https://api.dicebear.com/9.x/initials/svg?seed=testappleuser",
+          "status": "idle"
+        },
+        {
+          "id": "user_g_1795588173541",
+          "name": "test.google.user",
+          "subtitle": "@testgoogleuser",
+          "avatar": "https://api.dicebear.com/9.x/initials/svg?seed=testgoogleuser",
+          "status": "idle"
+        },
+        {
+          "id": "user_1795588155867",
+          "name": "Real Test User",
+          "subtitle": "@real_155773",
+          "avatar": "/recreation/avatar_left_elena_hires.png",
+          "status": "idle"
+        },
+        {
+          "id": "user_1795588125550",
+          "name": "Real Test User",
+          "subtitle": "@real_125406",
+          "avatar": "/recreation/avatar_left_elena_hires.png",
+          "status": "idle"
+        },
+        {
+          "id": "sug_liam",
+          "name": "Liam Sterling",
+          "subtitle": "Followed by sarah_lin",
+          "avatar": "/notifications/liam.png",
+          "status": "idle"
+        },
+        {
+          "id": "sug_helene",
+          "name": "Hélène Moreau",
+          "subtitle": "8 mutual friends",
+          "avatar": "/notifications/helene.png",
+          "status": "idle"
+        }
+      ]
+    }
+  }
 }

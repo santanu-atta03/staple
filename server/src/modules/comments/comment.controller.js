@@ -22,7 +22,9 @@ const getPostComments = async (req, res, next) => {
     const page = parseInt(req.query.page, 10) || 1;
     const comments = await commentService.getCommentsByPost(
       req.params.postId,
-      page
+      page,
+      20,
+      req.user?._id || req.user?.id
     );
     res.json({ success: true, comments });
   } catch (err) {

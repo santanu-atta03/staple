@@ -1,4 +1,5 @@
-require("dotenv").config();
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "../.env") });
 
 const http = require("http");
 const app = require("./app");
@@ -7,37 +8,33 @@ const { initSocket } = require("./config/socket");
 const redis = require("./config/redis");
 const mongoose = require("mongoose");
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5055;
 
 const startServer = async () => {
   try {
-    // Attempt MongoDB connection (falls back to memory store if unavailable)
-    try {
-      await connectDB();
-    } catch (err) {
-      console.warn("MongoDB connection bypassed, running with in-memory store.");
-    }
-
-    // Attempt Redis connection
-    try {
-      await redis.ping();
-    } catch (err) {
-      console.warn("Redis ping bypassed, running with in-memory cache.");
+    if (!process.env.JWT_ACCESS_SECRET || Buffer.byteLength(process.env.JWT_ACCESS_SECRET) < 32) {
+      throw new Error("JWT_ACCESS_SECRET must contain at least 32 bytes");
     }
 
     // Create HTTP server
     const httpServer = http.createServer(app);
 
     // Initialize Socket.IO
-    try {
-      initSocket(httpServer);
-    } catch (err) {
-      console.warn("Socket.io initialized in basic mode.");
-    }
+    initSocket(httpServer);
 
-    // Start server
-    httpServer.listen(PORT, "0.0.0.0", () => {
+    // Start server immediately so frontend proxy never encounters ECONNREFUSED
+    httpServer.listen(PORT, () => {
       console.log(`Staple server running on port ${PORT}`);
+    });
+
+    // Connect to database asynchronously in the background
+    connectDB().catch((err) => {
+      console.warn("MongoDB connection background notice:", err.message);
+    });
+
+    // Attempt Redis connection
+    redis.ping().catch(() => {
+      console.warn("Redis ping bypassed, running with in-memory cache.");
     });
 
     // Graceful shutdown

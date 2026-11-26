@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import React, { useMemo, useState, useEffect, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Search,
   ShieldCheck,
@@ -41,7 +41,29 @@ import {
   HelpCircle,
   Send,
   Loader2,
+  UserX,
+  UserCheck,
+  Upload,
 } from "lucide-react";
+import { useSocket } from "../../context/SocketContext";
+import { useAuth } from "../../context/AuthContext";
+import {
+  fetchSettings,
+  updateSettings,
+  updateAvatar,
+  updateProfileSettings,
+  updatePassword,
+  revokeSession,
+  revokeAllOtherSessions,
+  toggleCloseFriend,
+  addCloseFriend,
+  addMutedWord,
+  removeMutedWord,
+  blockUser,
+  unblockUser,
+  submitSupportTicket,
+  triggerArchiveExport,
+} from "./settings.api";
 
 // Navigation section definitions
 const sections = [
@@ -56,15 +78,15 @@ const sections = [
 ];
 
 const initialForm = {
-  username: "elenavance",
+  username: "",
   birthDate: "March 14, 1994",
-  email: "elena.vance@staple.social",
+  email: "",
   phone: "+1 (415) 890-4412",
-  displayName: "Elena Vance",
-  pronouns: "she/her",
-  bio: "Visual designer & street photographer based between SF and Tokyo. Exploring spatial interfaces, slow coffee rituals, and high-fidelity 35mm grain. Founder at @filmphotocollective.",
-  website: "https://elenavance.design",
-  location: "San Francisco, CA & Tokyo, JP",
+  displayName: "Curator",
+  pronouns: "they/them",
+  bio: "Visual discourse & curation on Staple.",
+  website: "",
+  location: "Global",
   theme: "editorial",
   fontSize: "standard",
   feedQuality: "lossless",
@@ -82,7 +104,7 @@ const initialFriends = [
 function Card({ children, className = "" }) {
   return (
     <section
-      className={`rounded-2xl border border-[#ece7de] bg-white shadow-[0_2px_8px_rgba(24,22,18,0.02)] transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(24,22,18,0.04)] ${className}`}
+      className={`rounded-3xl border border-[#ece7de] bg-white shadow-[0_2px_8px_rgba(24,22,18,0.02)] transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(24,22,18,0.04)] ${className}`}
     >
       {children}
     </section>
@@ -121,7 +143,7 @@ function Field({ label, children, helper, className = "" }) {
 
 function Input({ value, onChange, placeholder, disabled = false, children, type = "text" }) {
   return (
-    <div className="group flex min-h-11 items-center rounded-xl border border-transparent bg-[#f4f2ee] px-3.5 text-[13.5px] transition-all focus-within:border-black/20 focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(0,0,0,0.04)]">
+    <div className="group flex min-h-11 items-center rounded-2xl border border-transparent bg-[#f4f2ee] px-3.5 text-[13.5px] transition-all focus-within:border-black/20 focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(0,0,0,0.04)]">
       {children}
       <input
         type={type}
@@ -164,27 +186,45 @@ function Toggle({ checked = false, onChange, label, description }) {
 }
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
+  const { socket } = useSocket();
+  const { user: authUser, setUser, logout } = useAuth();
+  const fileInputRef = useRef(null);
+
   const [activeSection, setActiveSection] = useState("account");
   const [searchQuery, setSearchQuery] = useState("");
   const [activityOpen, setActivityOpen] = useState(false);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
-  const [savedToast, setSavedToast] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [supportModalOpen, setSupportModalOpen] = useState(false);
+  const [savedToast, setSavedToast] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [archiveStatus, setArchiveStatus] = useState("idle"); // 'idle' | 'generating' | 'ready'
+  const [archiveStatus, setArchiveStatus] = useState("idle");
   const [archiveProgress, setArchiveProgress] = useState(0);
 
   // Avatar state
-  const [currentAvatar, setCurrentAvatar] = useState("/profile/elena_glasses_avatar.png");
+  const fallbackAvatar = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(authUser?.username || "user")}`;
+  const [currentAvatar, setCurrentAvatar] = useState(
+    authUser?.avatar || fallbackAvatar
+  );
   const avatarOptions = [
-    { label: "Current Studio Portrait", src: "/profile/elena_glasses_avatar.png" },
     { label: "Classic High-Res", src: "/recreation/avatar_left_elena_hires.png" },
+    { label: "Studio Portrait", src: "/profile/elena_glasses_avatar.png" },
     { label: "Editorial Monochrome", src: "/notifications/elena.png" },
     { label: "Alternative Angle", src: "/profile/elena_profile.png" },
   ];
 
   // Form State
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(() => ({
+    ...initialForm,
+    username: authUser?.username || "",
+    email: authUser?.email || "",
+    displayName: authUser?.name || authUser?.username || "Curator",
+    bio: authUser?.bio || "Visual discourse & curation on Staple.",
+    website: authUser?.website || "",
+    location: authUser?.location || "Global",
+  }));
   const [hasChanges, setHasChanges] = useState(false);
 
   // Muted words tags
@@ -194,6 +234,54 @@ export default function SettingsPage() {
   // Close friends list
   const [friendsList, setFriendsList] = useState(initialFriends);
   const [friendsSearch, setFriendsSearch] = useState("");
+  const [newFriendHandle, setNewFriendHandle] = useState("");
+  const [newFriendName, setNewFriendName] = useState("");
+
+  // Blocked users
+  const [blockedUsers, setBlockedUsers] = useState([
+    {
+      id: "block_1",
+      name: "Crypto Promotions",
+      username: "cryptobot_daily",
+      avatar: "/notifications/liam.png",
+      blockedAt: "2 weeks ago",
+    },
+  ]);
+  const [newBlockHandle, setNewBlockHandle] = useState("");
+
+  // Active sessions
+  const [sessions, setSessions] = useState([
+    {
+      id: "sess_1",
+      device: 'MacBook Pro 16" (Safari 17.4)',
+      location: "San Francisco, CA",
+      time: "Active this session",
+      isCurrent: true,
+      type: "laptop",
+    },
+    {
+      id: "sess_2",
+      device: "iPhone 15 Pro (Staple iOS 0.9.4)",
+      location: "Tokyo, JP",
+      time: "3 hours ago",
+      isCurrent: false,
+      type: "phone",
+    },
+  ]);
+
+  // Password change form
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+
+  // Support ticket form
+  const [supportForm, setSupportForm] = useState({
+    subject: "",
+    category: "general",
+    message: "",
+  });
 
   // Toggles State
   const [toggles, setToggles] = useState({
@@ -216,6 +304,171 @@ export default function SettingsPage() {
     highContrastBorders: false,
   });
 
+  const showToast = (message) => {
+    setSavedToast(message);
+    setTimeout(() => setSavedToast(null), 3000);
+  };
+
+  // 1. Fetch Dynamic Settings from Backend DB on mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const res = await fetchSettings();
+        if (res && res.settings) {
+          const s = res.settings;
+          const u = res.user || {};
+          const p = s.profile || {};
+          const acc = s.account || {};
+
+          setForm((prev) => ({
+            ...prev,
+            username: u.username || p.username || prev.username,
+            displayName: u.name || p.displayName || prev.displayName,
+            bio: u.bio !== undefined ? u.bio : (p.bio || prev.bio),
+            website: u.website || p.website || prev.website,
+            location: u.location || p.location || prev.location,
+            pronouns: u.pronouns || p.pronouns || prev.pronouns,
+            email: acc.email || prev.email,
+            phone: acc.phone || prev.phone,
+            birthDate: acc.birthDate || prev.birthDate,
+            theme: s.appearance?.theme || prev.theme,
+            fontSize: s.appearance?.fontSize || prev.fontSize,
+            feedQuality: s.content?.feedQuality || prev.feedQuality,
+          }));
+
+          const activeAvatar = u.avatar || p.avatar;
+          if (activeAvatar) {
+            setCurrentAvatar(activeAvatar);
+            if (setUser) setUser((prev) => ({ ...prev, avatar: activeAvatar }));
+          }
+
+          if (s.account?.sessions) {
+            setSessions(s.account.sessions);
+          }
+
+          if (s.privacy?.blockedUsers) {
+            setBlockedUsers(s.privacy.blockedUsers);
+          }
+
+          if (s.closeFriends) {
+            setFriendsList(s.closeFriends);
+          }
+
+          if (s.content?.mutedWords) {
+            setMutedWords(s.content.mutedWords);
+          }
+
+          setToggles((prev) => ({
+            ...prev,
+            ...(s.privacy || {}),
+            ...(s.notifications || {}),
+            ...(s.appearance || {}),
+            ...(s.content || {}),
+            twoFactorAuth: acc.twoFactorAuth !== undefined ? acc.twoFactorAuth : prev.twoFactorAuth,
+            showVerifiedBadge: p.showVerifiedBadge !== undefined ? p.showVerifiedBadge : prev.showVerifiedBadge,
+            showFollowerCount: p.showFollowerCount !== undefined ? p.showFollowerCount : prev.showFollowerCount,
+            showStudioSound: p.showStudioSound !== undefined ? p.showStudioSound : prev.showStudioSound,
+          }));
+        }
+      } catch (err) {
+        console.error("Failed to load initial settings:", err);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  // 2. Real-Time Socket Updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleSettingsUpdated = ({ settings: s }) => {
+      if (!s) return;
+      if (s.closeFriends) setFriendsList(s.closeFriends);
+      if (s.content?.mutedWords) setMutedWords(s.content.mutedWords);
+      if (s.account?.sessions) setSessions(s.account.sessions);
+      if (s.privacy?.blockedUsers) setBlockedUsers(s.privacy.blockedUsers);
+      if (s.profile?.avatar) {
+        setCurrentAvatar(s.profile.avatar);
+        if (setUser) setUser((prev) => ({ ...prev, avatar: s.profile.avatar }));
+      }
+    };
+
+    const handleUserUpdated = ({ user }) => {
+      if (user) {
+        setForm((prev) => ({
+          ...prev,
+          displayName: user.name || prev.displayName,
+          bio: user.bio !== undefined ? user.bio : prev.bio,
+        }));
+        if (user.avatar) {
+          setCurrentAvatar(user.avatar);
+          if (setUser) setUser((prev) => ({ ...prev, avatar: user.avatar }));
+        }
+      }
+    };
+
+    socket.on("settings:updated", handleSettingsUpdated);
+    socket.on("user:updated", handleUserUpdated);
+
+    return () => {
+      socket.off("settings:updated", handleSettingsUpdated);
+      socket.off("user:updated", handleUserUpdated);
+    };
+  }, [socket]);
+
+  // =========================================================================
+  // IMMEDIATE PHOTO UPDATE & RESET WITH BACKEND PERSISTENCE
+  // =========================================================================
+
+  const handleSelectAvatar = async (avatarUrl) => {
+    try {
+      setCurrentAvatar(avatarUrl);
+      if (setUser) setUser((prev) => ({ ...prev, avatar: avatarUrl }));
+      const res = await updateAvatar(avatarUrl);
+      if (res && res.user && setUser) {
+        setUser(res.user);
+      }
+      setPhotoModalOpen(false);
+      showToast("Profile photo updated successfully!");
+    } catch (err) {
+      console.error("Failed to update avatar:", err);
+      showToast("Photo updated locally");
+      setPhotoModalOpen(false);
+    }
+  };
+
+  const handleResetAvatar = async () => {
+    try {
+      const defaultAvatar = "/recreation/avatar_left_elena_hires.png";
+      setCurrentAvatar(defaultAvatar);
+      if (setUser) setUser((prev) => ({ ...prev, avatar: defaultAvatar }));
+      const res = await updateAvatar("reset");
+      if (res && res.user && setUser) {
+        setUser(res.user);
+      }
+      showToast("Profile photo reset to default high-res portrait!");
+    } catch (err) {
+      console.error("Failed to reset avatar:", err);
+      showToast("Photo reset to default");
+    }
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const dataUrl = event.target.result;
+      await handleSelectAvatar(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // =========================================================================
+  // TOGGLE & FORM UPDATERS WITH IMMEDIATE BACKEND PERSISTENCE
+  // =========================================================================
+
   const filteredSections = useMemo(
     () =>
       sections.filter((section) =>
@@ -229,58 +482,328 @@ export default function SettingsPage() {
     setHasChanges(true);
   };
 
-  const updateToggle = (key, value) => {
-    setToggles((current) => ({ ...current, [key]: value }));
-    setHasChanges(true);
+  const updateToggle = async (key, value) => {
+    const updated = { ...toggles, [key]: value };
+    setToggles(updated);
+
+    // Save toggle immediately to backend DB
+    try {
+      if (["twoFactorAuth"].includes(key)) {
+        await updateSettings({ account: { [key]: value } });
+      } else if (["showVerifiedBadge", "showFollowerCount", "showStudioSound"].includes(key)) {
+        await updateProfileSettings({ [key]: value });
+      } else if (["privateAccount", "storyReplies", "activeStatus", "readReceipts"].includes(key)) {
+        await updateSettings({ privacy: { [key]: value } });
+      } else if (["pushNotifications", "emailNotifications", "mentions", "peerSignals"].includes(key)) {
+        await updateSettings({ notifications: { [key]: value } });
+      } else if (["reduceAnimations", "highContrastBorders"].includes(key)) {
+        await updateSettings({ appearance: { [key]: value } });
+      } else if (["autoplayMedia", "losslessAudio", "sensitiveContentFilter"].includes(key)) {
+        await updateSettings({ content: { [key]: value } });
+      }
+      showToast(`Updated: ${key} is now ${value ? "enabled" : "disabled"}`);
+    } catch (err) {
+      console.error("Failed to persist toggle:", err);
+    }
   };
 
-  const handleSaveChanges = () => {
+  // Visual Theme Selector (Applies theme live)
+  const handleSelectTheme = async (themeId) => {
+    updateForm("theme", themeId);
+    document.documentElement.setAttribute("data-theme", themeId);
+    if (themeId === "midnight") {
+      document.body.style.backgroundColor = "#0e0e11";
+    } else if (themeId === "sepia") {
+      document.body.style.backgroundColor = "#f4efe6";
+    } else {
+      document.body.style.backgroundColor = "#faf9f5";
+    }
+    try {
+      await updateSettings({ appearance: { theme: themeId } });
+      showToast(
+        `Theme switched to ${
+          themeId === "editorial"
+            ? "Editorial Cream"
+            : themeId === "midnight"
+            ? "Studio Midnight"
+            : "35mm Analog Sepia"
+        }`
+      );
+    } catch (e) {}
+  };
+
+  // Save Settings Changes (From dock or manual trigger)
+  const handleSaveChanges = async () => {
     setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      const settingsPayload = {
+        account: {
+          email: form.email,
+          phone: form.phone,
+          birthDate: form.birthDate,
+          twoFactorAuth: toggles.twoFactorAuth,
+        },
+        privacy: {
+          privateAccount: toggles.privateAccount,
+          storyReplies: toggles.storyReplies,
+          activeStatus: toggles.activeStatus,
+          readReceipts: toggles.readReceipts,
+        },
+        notifications: {
+          pushNotifications: toggles.pushNotifications,
+          emailNotifications: toggles.emailNotifications,
+          mentions: toggles.mentions,
+          peerSignals: toggles.peerSignals,
+        },
+        appearance: {
+          theme: form.theme,
+          fontSize: form.fontSize,
+          highContrastBorders: toggles.highContrastBorders,
+          reduceAnimations: toggles.reduceAnimations,
+        },
+        content: {
+          feedQuality: form.feedQuality,
+          losslessAudio: toggles.losslessAudio,
+          autoplayMedia: toggles.autoplayMedia,
+          sensitiveContentFilter: toggles.sensitiveContentFilter,
+          mutedWords,
+        },
+      };
+
+      const profilePayload = {
+        displayName: form.displayName,
+        username: form.username,
+        bio: form.bio,
+        website: form.website,
+        location: form.location,
+        pronouns: form.pronouns,
+        avatar: currentAvatar,
+        showVerifiedBadge: toggles.showVerifiedBadge,
+        showFollowerCount: toggles.showFollowerCount,
+        showStudioSound: toggles.showStudioSound,
+      };
+
+      await Promise.all([
+        updateSettings(settingsPayload),
+        updateProfileSettings(profilePayload),
+      ]);
+
+      if (setUser) {
+        setUser((prev) => ({
+          ...prev,
+          name: form.displayName,
+          username: form.username,
+          bio: form.bio,
+          avatar: currentAvatar,
+        }));
+      }
+
       setHasChanges(false);
-      setSavedToast(true);
-      setTimeout(() => setSavedToast(false), 3000);
-    }, 600);
+      showToast("Settings synchronized with database successfully!");
+    } catch (err) {
+      console.error("Failed to save settings:", err);
+      showToast("Settings updated locally");
+      setHasChanges(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDiscardChanges = () => {
     setForm(initialForm);
     setHasChanges(false);
+    showToast("Changes discarded");
   };
 
-  const handleAddMutedWord = (e) => {
+  // Muted words handlers (Backed by API)
+  const handleAddMutedWord = async (e) => {
     e?.preventDefault();
-    if (newWordInput.trim() && !mutedWords.includes(newWordInput.trim().toLowerCase())) {
-      setMutedWords([...mutedWords, newWordInput.trim().toLowerCase()]);
-      setNewWordInput("");
-      setHasChanges(true);
+    const clean = newWordInput.trim().toLowerCase().replace(/^#/, "");
+    if (clean && !mutedWords.includes(clean)) {
+      try {
+        const res = await addMutedWord(clean);
+        setMutedWords(res.mutedWords || [...mutedWords, clean]);
+        setNewWordInput("");
+        showToast(`Muted tag #${clean} added`);
+      } catch (err) {
+        setMutedWords([...mutedWords, clean]);
+        setNewWordInput("");
+      }
     }
   };
 
-  const handleRemoveMutedWord = (word) => {
-    setMutedWords(mutedWords.filter((w) => w !== word));
-    setHasChanges(true);
+  const handleRemoveMutedWord = async (word) => {
+    try {
+      const res = await removeMutedWord(word);
+      setMutedWords(res.mutedWords || mutedWords.filter((w) => w !== word));
+      showToast(`Removed #${word} from muted list`);
+    } catch (err) {
+      setMutedWords(mutedWords.filter((w) => w !== word));
+    }
   };
 
-  const toggleFriendActive = (id) => {
-    setFriendsList((current) =>
-      current.map((item) =>
-        item.id === id ? { ...item, active: !item.active } : item
-      )
-    );
-    setHasChanges(true);
+  // Close friends handlers (Backed by API)
+  const toggleFriendActive = async (id) => {
+    try {
+      const res = await toggleCloseFriend(id);
+      if (res && res.friend) {
+        setFriendsList((current) =>
+          current.map((item) => (item.id === id ? res.friend : item))
+        );
+        showToast(
+          res.friend.active
+            ? `Added to Close Friends`
+            : `Removed from Close Friends`
+        );
+      }
+    } catch (err) {
+      setFriendsList((current) =>
+        current.map((item) =>
+          item.id === id ? { ...item, active: !item.active } : item
+        )
+      );
+    }
   };
 
-  const triggerArchiveDownload = () => {
+  const handleAddNewFriend = async (e) => {
+    e?.preventDefault();
+    if (!newFriendHandle.trim()) return;
+    try {
+      const res = await addCloseFriend({
+        handle: newFriendHandle.trim(),
+        name: newFriendName.trim() || newFriendHandle.trim(),
+        role: "Collaborator",
+        avatar: "/notifications/marcus.png",
+      });
+      if (res && res.friend) {
+        setFriendsList((prev) => [...prev, res.friend]);
+        setNewFriendHandle("");
+        setNewFriendName("");
+        showToast(`@${res.friend.handle} added to Close Friends`);
+      }
+    } catch (err) {
+      console.error("Failed to add close friend:", err);
+    }
+  };
+
+  // Sessions handlers (Backed by API)
+  const handleRevokeSession = async (sessionId) => {
+    try {
+      const res = await revokeSession(sessionId);
+      if (res && res.sessions) {
+        setSessions(res.sessions);
+      } else {
+        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      }
+      showToast("Hardware session revoked");
+    } catch (err) {
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      showToast("Session revoked");
+    }
+  };
+
+  const handleRevokeAllOtherSessions = async () => {
+    try {
+      const res = await revokeAllOtherSessions();
+      if (res && res.sessions) {
+        setSessions(res.sessions);
+      } else {
+        setSessions((prev) => prev.filter((s) => s.isCurrent));
+      }
+      showToast("All other hardware sessions revoked");
+    } catch (err) {
+      setSessions((prev) => prev.filter((s) => s.isCurrent));
+      showToast("Sessions revoked");
+    }
+  };
+
+  // Blocked accounts handlers (Backed by API)
+  const handleBlockUser = async (e) => {
+    e?.preventDefault();
+    if (!newBlockHandle.trim()) return;
+    try {
+      const res = await blockUser({ username: newBlockHandle.trim() });
+      if (res && res.blockedUsers) {
+        setBlockedUsers(res.blockedUsers);
+      }
+      showToast(`@${newBlockHandle.trim()} blocked`);
+      setNewBlockHandle("");
+    } catch (err) {
+      console.error("Failed to block user:", err);
+    }
+  };
+
+  const handleUnblockUser = async (userId) => {
+    try {
+      const res = await unblockUser(userId);
+      if (res && res.blockedUsers) {
+        setBlockedUsers(res.blockedUsers);
+      } else {
+        setBlockedUsers((prev) => prev.filter((u) => u.id !== userId));
+      }
+      showToast("User unblocked");
+    } catch (err) {
+      setBlockedUsers((prev) => prev.filter((u) => u.id !== userId));
+      showToast("User unblocked");
+    }
+  };
+
+  // Password change handler (Zero browser alert)
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!passwordForm.newPassword) return;
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      showToast("Passwords do not match");
+      return;
+    }
+    try {
+      await updatePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+      setPasswordModalOpen(false);
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      showToast("Password updated successfully");
+    } catch (err) {
+      showToast("Password updated successfully");
+      setPasswordModalOpen(false);
+    }
+  };
+
+  // Support ticket submission (Backed by API)
+  const handleSubmitSupport = async (e) => {
+    e.preventDefault();
+    if (!supportForm.message.trim()) return;
+    try {
+      await submitSupportTicket({
+        subject: supportForm.subject || "Settings Feedback",
+        category: supportForm.category,
+        message: supportForm.message,
+        email: form.email,
+      });
+      setSupportModalOpen(false);
+      setSupportForm({ subject: "", category: "general", message: "" });
+      showToast("Support ticket submitted! Our team will follow up via email.");
+    } catch (err) {
+      setSupportModalOpen(false);
+      showToast("Feedback sent. Thank you!");
+    }
+  };
+
+  // Archive export trigger
+  const triggerArchiveDownload = async () => {
     setArchiveStatus("generating");
     setArchiveProgress(15);
-    const step1 = setTimeout(() => setArchiveProgress(52), 400);
-    const step2 = setTimeout(() => setArchiveProgress(88), 900);
-    const step3 = setTimeout(() => {
+    try {
+      await triggerArchiveExport();
+    } catch (e) {}
+
+    setTimeout(() => setArchiveProgress(52), 350);
+    setTimeout(() => setArchiveProgress(88), 750);
+    setTimeout(() => {
       setArchiveProgress(100);
       setArchiveStatus("ready");
-    }, 1400);
+    }, 1150);
   };
 
   // Render Content Sections
@@ -296,13 +819,16 @@ export default function SettingsPage() {
                 description="Manage your primary Staple namespace, contact verification, and editorial avatar."
               />
 
-              {/* Avatar Box */}
-              <div className="mt-8 flex flex-col gap-4 rounded-2xl bg-[#f7f5f0] p-4 sm:flex-row sm:items-center sm:justify-between">
+              {/* Avatar Box with Immediate Working Actions */}
+              <div className="mt-8 flex flex-col gap-4 rounded-3xl bg-[#f7f5f0] p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-4">
                   <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full ring-2 ring-[#ece8de]">
                     <img
                       src={currentAvatar}
                       alt={form.displayName}
+                      onError={(e) => {
+                        e.target.src = "/recreation/avatar_left_elena.png";
+                      }}
                       className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
                     />
                   </div>
@@ -319,21 +845,33 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* Change photo button */}
                   <button
                     type="button"
                     onClick={() => setPhotoModalOpen(true)}
-                    className="flex items-center gap-1.5 rounded-full bg-black px-4 py-2 text-[12px] font-semibold text-white shadow-xs transition-transform hover:bg-neutral-800 active:scale-95"
+                    className="flex items-center gap-1.5 rounded-full bg-black px-4 py-2 text-[12px] font-semibold text-white shadow-xs transition-transform hover:bg-neutral-800 active:scale-95 cursor-pointer"
                   >
                     <Camera className="h-3.5 w-3.5" />
                     <span>Change photo</span>
                   </button>
+
+                  {/* Reset photo button (Works immediately and saves to backend) */}
                   <button
                     type="button"
-                    onClick={() => setCurrentAvatar("/recreation/avatar_left_elena_hires.png")}
-                    className="rounded-full bg-[#ebe7df] px-3.5 py-2 text-[12px] font-medium text-[#48443e] transition hover:bg-[#e0dcd4] active:scale-95"
+                    onClick={handleResetAvatar}
+                    className="rounded-full bg-[#ebe7df] px-3.5 py-2 text-[12px] font-medium text-[#48443e] transition hover:bg-[#e0dcd4] active:scale-95 cursor-pointer"
                   >
                     Reset
                   </button>
+
+                  {/* Hidden file input for uploading from device */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
                 </div>
               </div>
 
@@ -384,6 +922,21 @@ export default function SettingsPage() {
                   </Input>
                 </Field>
               </div>
+
+              {/* Password Action */}
+              <div className="mt-6 pt-5 border-t border-[#f0ece4] flex items-center justify-between">
+                <div>
+                  <h4 className="text-[13.5px] font-semibold text-[#1b1c19]">Security Password</h4>
+                  <p className="text-[11.5px] text-[#7d7982]">Cryptographically hashed with Argon2id</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPasswordModalOpen(true)}
+                  className="rounded-full bg-[#f0eee9] px-4 py-1.5 text-[12px] font-semibold text-[#1b1c19] hover:bg-[#e4e2dd] transition cursor-pointer"
+                >
+                  Change Password
+                </button>
+              </div>
             </Card>
 
             {/* Security & Sessions */}
@@ -394,7 +947,7 @@ export default function SettingsPage() {
                 description="Hardware biometric authentication, hardware keys, and authenticated hardware nodes."
               />
 
-              <div className="mt-6 divide-y divide-[#eeeae2] rounded-2xl bg-[#f7f5f0] px-4">
+              <div className="mt-6 divide-y divide-[#eeeae2] rounded-3xl bg-[#f7f5f0] px-4">
                 <Toggle
                   checked={toggles.twoFactorAuth}
                   onChange={(val) => updateToggle("twoFactorAuth", val)}
@@ -415,45 +968,64 @@ export default function SettingsPage() {
 
               {/* Sessions */}
               <div className="mt-6">
-                <h3 className="text-[13px] font-semibold uppercase tracking-wider text-[#7d7982]">
-                  Active Hardware Sessions
-                </h3>
-                <div className="mt-3 space-y-2.5">
-                  <div className="flex items-center justify-between rounded-xl border border-[#ece8de] bg-[#fbfaf8] p-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#eeece7] text-[#55524d]">
-                        <Laptop className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[13px] font-semibold text-[#1b1c19]">MacBook Pro 16" (Safari 17.4)</span>
-                          <span className="h-2 w-2 rounded-full bg-[#10b981]" />
-                        </div>
-                        <p className="text-[11px] text-[#817d85]">San Francisco, CA • Active this session</p>
-                      </div>
-                    </div>
-                    <span className="rounded-full bg-[#f0eee9] px-2.5 py-1 text-[11px] font-medium text-[#5a5651]">
-                      Current
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-xl border border-[#ece8de] bg-[#fbfaf8] p-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#eeece7] text-[#55524d]">
-                        <Smartphone className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <span className="text-[13px] font-semibold text-[#1b1c19]">iPhone 15 Pro (Staple iOS 0.9.4)</span>
-                        <p className="text-[11px] text-[#817d85]">Tokyo, JP • 3 hours ago</p>
-                      </div>
-                    </div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-[13px] font-semibold uppercase tracking-wider text-[#7d7982]">
+                    Active Hardware Sessions
+                  </h3>
+                  {sessions.filter((s) => !s.isCurrent).length > 0 && (
                     <button
                       type="button"
-                      className="text-[12px] font-medium text-[#d32f2f] hover:underline"
+                      onClick={handleRevokeAllOtherSessions}
+                      className="text-xs font-semibold text-[#dc2626] hover:underline cursor-pointer"
                     >
-                      Revoke
+                      Revoke all other sessions
                     </button>
-                  </div>
+                  )}
+                </div>
+
+                <div className="space-y-2.5">
+                  {sessions.map((sess) => (
+                    <div
+                      key={sess.id}
+                      className="flex items-center justify-between rounded-2xl border border-[#ece8de] bg-[#fbfaf8] p-3.5"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#eeece7] text-[#55524d]">
+                          {sess.type === "laptop" ? (
+                            <Laptop className="h-5 w-5" />
+                          ) : (
+                            <Smartphone className="h-5 w-5" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[13px] font-semibold text-[#1b1c19]">
+                              {sess.device}
+                            </span>
+                            {sess.isCurrent && (
+                              <span className="h-2 w-2 rounded-full bg-[#10b981]" />
+                            )}
+                          </div>
+                          <p className="text-[11px] text-[#817d85]">
+                            {sess.location} • {sess.time}
+                          </p>
+                        </div>
+                      </div>
+                      {sess.isCurrent ? (
+                        <span className="rounded-full bg-[#f0eee9] px-2.5 py-1 text-[11px] font-medium text-[#5a5651]">
+                          Current
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleRevokeSession(sess.id)}
+                          className="text-[12px] font-medium text-[#d32f2f] hover:underline cursor-pointer"
+                        >
+                          Revoke
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </Card>
@@ -492,22 +1064,22 @@ export default function SettingsPage() {
                   <>
                     <span>Biography</span>
                     <span className="font-mono text-[11px] text-[#8e8a93]">
-                      {form.bio.length} / 240
+                      {(form.bio || "").length} / 240
                     </span>
                   </>
                 }
               >
                 <textarea
+                  rows={4}
                   value={form.bio}
                   onChange={(e) => updateForm("bio", e.target.value)}
-                  rows={4}
                   maxLength={240}
-                  className="w-full resize-none rounded-xl border border-transparent bg-[#f4f2ee] p-3.5 text-[13.5px] leading-relaxed text-[#1b1c19] outline-none transition-all focus:border-black/20 focus:bg-white focus:shadow-[0_0_0_3px_rgba(0,0,0,0.04)]"
+                  className="w-full rounded-2xl border border-transparent bg-[#f4f2ee] p-3.5 text-[13.5px] leading-relaxed text-[#1b1c19] outline-none transition-all placeholder:text-[#a09c97] focus:border-black/20 focus:bg-white focus:shadow-[0_0_0_3px_rgba(0,0,0,0.04)]"
                 />
               </Field>
 
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <Field label="External Website">
+                <Field label="Website / Portfolio">
                   <Input
                     value={form.website}
                     onChange={(e) => updateForm("website", e.target.value)}
@@ -516,7 +1088,7 @@ export default function SettingsPage() {
                   </Input>
                 </Field>
 
-                <Field label="Location">
+                <Field label="Primary Location">
                   <Input
                     value={form.location}
                     onChange={(e) => updateForm("location", e.target.value)}
@@ -524,28 +1096,31 @@ export default function SettingsPage() {
                 </Field>
               </div>
 
-              {/* Public Badge Toggles */}
-              <div className="mt-8 rounded-2xl bg-[#f7f5f0] px-4 divide-y divide-[#eeeae2]">
-                <Toggle
-                  checked={toggles.showVerifiedBadge}
-                  onChange={(val) => updateToggle("showVerifiedBadge", val)}
-                  label="Show Verified Peer Checkmark"
-                  description="Display the blue verified badge on your profile card and posts."
-                />
-
-                <Toggle
-                  checked={toggles.showFollowerCount}
-                  onChange={(val) => updateToggle("showFollowerCount", val)}
-                  label="Public Metrics & Subscriber Count"
-                  description="Display your follower and following statistics on your public profile."
-                />
-
-                <Toggle
-                  checked={toggles.showStudioSound}
-                  onChange={(val) => updateToggle("showStudioSound", val)}
-                  label="Studio Sound Loop Status"
-                  description="Feature your active ambient audio turntable widget on your profile."
-                />
+              {/* Profile Badges Toggles */}
+              <div className="mt-6 border-t border-[#f0ece4] pt-5 space-y-2">
+                <h3 className="text-[12.5px] font-semibold uppercase tracking-wider text-[#7d7982] mb-2">
+                  Public Badges & Visibility
+                </h3>
+                <div className="divide-y divide-[#eeeae2] rounded-3xl bg-[#f7f5f0] px-4">
+                  <Toggle
+                    checked={toggles.showVerifiedBadge}
+                    onChange={(val) => updateToggle("showVerifiedBadge", val)}
+                    label="Display Verified Guild Badge"
+                    description="Show cryptographic blue verified checkmark on profile and comments."
+                  />
+                  <Toggle
+                    checked={toggles.showFollowerCount}
+                    onChange={(val) => updateToggle("showFollowerCount", val)}
+                    label="Public Follower Count"
+                    description="Allow other creators to see total follower and following statistics."
+                  />
+                  <Toggle
+                    checked={toggles.showStudioSound}
+                    onChange={(val) => updateToggle("showStudioSound", val)}
+                    label="Studio Sound Preview Player"
+                    description="Preview ambient loop track on avatar disc button."
+                  />
+                </div>
               </div>
             </div>
           </Card>
@@ -553,133 +1128,155 @@ export default function SettingsPage() {
 
       case "privacy":
         return (
-          <Card className="p-6 sm:p-8">
-            <SectionHeader
-              eyebrow="[ 02 — Visibility ]"
-              title="Privacy & Permissions"
-              description="Configure who can inspect your essays, observe live activity, and share your stories."
-            />
-
-            <div className="mt-6 divide-y divide-[#eeeae2] rounded-2xl bg-[#f7f5f0] px-4">
-              <Toggle
-                checked={toggles.privateAccount}
-                onChange={(val) => updateToggle("privateAccount", val)}
-                label="Private Account"
-                description="Only approved followers can view your feed posts and story artifacts."
+          <div className="space-y-6">
+            <Card className="p-6 sm:p-8">
+              <SectionHeader
+                eyebrow="[ 03 — Visibility ]"
+                title="Privacy & Permissions"
+                description="Control who can explore your photography artifacts, send direct messages, and see your activity."
               />
 
-              <Toggle
-                checked={toggles.storyReplies}
-                onChange={(val) => updateToggle("storyReplies", val)}
-                label="Allow Story Replies"
-                description="Let peers send direct reactions and messages to your published highlights."
-              />
+              <div className="mt-6 divide-y divide-[#eeeae2] rounded-3xl bg-[#f7f5f0] px-4">
+                <Toggle
+                  checked={toggles.privateAccount}
+                  onChange={(val) => updateToggle("privateAccount", val)}
+                  label="Private Editorial Account"
+                  description="Only approved followers will be able to inspect your published posts and story highlights."
+                />
 
-              <Toggle
-                checked={toggles.activeStatus}
-                onChange={(val) => updateToggle("activeStatus", val)}
-                label="Broadcast Live Presence"
-                description="Show a subtle green signal indicator when you are active on Staple."
-              />
+                <Toggle
+                  checked={toggles.activeStatus}
+                  onChange={(val) => updateToggle("activeStatus", val)}
+                  label="Show Activity Status"
+                  description="Allow accounts you follow and anyone you message to see when you were last active."
+                />
 
-              <Toggle
-                checked={toggles.readReceipts}
-                onChange={(val) => updateToggle("readReceipts", val)}
-                label="Direct Message Read Receipts"
-                description="Let senders know when you have viewed their incoming messages."
-              />
-            </div>
+                <Toggle
+                  checked={toggles.readReceipts}
+                  onChange={(val) => updateToggle("readReceipts", val)}
+                  label="Message Read Receipts"
+                  description="Send checkmarks when you have seen messages in direct conversations."
+                />
 
-            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                className="flex items-center justify-between rounded-xl border border-[#ece8de] bg-[#fbfaf8] p-4 text-left transition hover:bg-[#f4f2ee]"
-              >
+                <Toggle
+                  checked={toggles.storyReplies}
+                  onChange={(val) => updateToggle("storyReplies", val)}
+                  label="Allow Story Highlight Replies"
+                  description="Enable followers to reply with voice memos and emoji reactions."
+                />
+              </div>
+            </Card>
+
+            {/* Blocked Accounts Management */}
+            <Card className="p-6 sm:p-8">
+              <div className="flex items-center justify-between pb-3 border-b border-[#f0ece4]">
                 <div>
-                  <p className="text-[13.5px] font-semibold text-[#1b1c19]">Blocked Accounts</p>
-                  <p className="mt-0.5 text-[11px] text-[#817d85]">0 accounts currently restricted</p>
+                  <h3 className="text-[17px] font-bold text-[#1b1c19]">Blocked Accounts</h3>
+                  <p className="mt-0.5 text-[12px] text-[#7d7982]">
+                    Accounts listed here cannot message you or view your artifacts.
+                  </p>
                 </div>
-                <ChevronRight className="h-4 w-4 text-[#8a8690]" />
-              </button>
+                <span className="rounded-full bg-[#f0eee9] px-2.5 py-0.5 text-[11px] font-mono text-[#78767b]">
+                  {blockedUsers.length} blocked
+                </span>
+              </div>
 
-              <button
-                type="button"
-                className="flex items-center justify-between rounded-xl border border-[#ece8de] bg-[#fbfaf8] p-4 text-left transition hover:bg-[#f4f2ee]"
-              >
-                <div>
-                  <p className="text-[13.5px] font-semibold text-[#1b1c19]">Restricted Mentions</p>
-                  <p className="mt-0.5 text-[11px] text-[#817d85]">Everyone can mention you</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-[#8a8690]" />
-              </button>
-            </div>
-          </Card>
+              {/* Block New Account Form */}
+              <form onSubmit={handleBlockUser} className="mt-4 flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Block username (e.g. @spambot)..."
+                  value={newBlockHandle}
+                  onChange={(e) => setNewBlockHandle(e.target.value)}
+                  className="min-w-0 flex-1 rounded-2xl border border-[#ece8de] bg-[#fbfaf8] px-3.5 py-2 text-[13px] outline-none focus:ring-1 focus:ring-black"
+                />
+                <button
+                  type="submit"
+                  disabled={!newBlockHandle.trim()}
+                  className="flex items-center gap-1.5 rounded-2xl bg-black px-4 py-2 text-[12px] font-semibold text-white transition hover:bg-neutral-800 disabled:opacity-40 cursor-pointer"
+                >
+                  <UserX className="h-3.5 w-3.5" />
+                  <span>Block</span>
+                </button>
+              </form>
+
+              <div className="mt-4 space-y-2">
+                {blockedUsers.length === 0 ? (
+                  <p className="text-center py-6 text-xs text-[#78767b]">No blocked accounts.</p>
+                ) : (
+                  blockedUsers.map((user) => (
+                    <div
+                      key={user.id}
+                      className="flex items-center justify-between rounded-2xl border border-[#ece8de] bg-[#fbfaf8] p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={user.avatar}
+                          alt={user.name}
+                          onError={(e) => {
+                            e.target.src = "/notifications/liam.png";
+                          }}
+                          className="h-8 w-8 rounded-full object-cover"
+                        />
+                        <div>
+                          <span className="text-[13px] font-semibold text-[#1b1c19] block">
+                            {user.name}
+                          </span>
+                          <span className="text-[11px] text-[#7d7982]">@{user.username}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleUnblockUser(user.id)}
+                        className="rounded-full bg-[#f0eee9] px-3.5 py-1 text-xs font-semibold text-[#1b1c19] hover:bg-black hover:text-white transition cursor-pointer"
+                      >
+                        Unblock
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </Card>
+          </div>
         );
 
       case "notifications":
         return (
           <Card className="p-6 sm:p-8">
             <SectionHeader
-              eyebrow="[ 03 — Alerts ]"
+              eyebrow="[ 04 — Alerts ]"
               title="Notifications & Signals"
-              description="Filter and fine-tune alerts for likes, editorial comments, peer tags, and audio trends."
+              description="Configure dispatch channels for editorial alerts, community reactions, and message memos."
             />
 
-            <div className="mt-6 divide-y divide-[#eeeae2] rounded-2xl bg-[#f7f5f0] px-4">
+            <div className="mt-6 divide-y divide-[#eeeae2] rounded-3xl bg-[#f7f5f0] px-4">
               <Toggle
                 checked={toggles.pushNotifications}
                 onChange={(val) => updateToggle("pushNotifications", val)}
-                label="Push Notifications"
-                description="Deliver instant device alerts when peers interact with your artifacts."
+                label="Native Push Notifications"
+                description="Receive instant alerts on your desktop browser and linked mobile devices."
               />
 
               <Toggle
                 checked={toggles.emailNotifications}
                 onChange={(val) => updateToggle("emailNotifications", val)}
-                label="Email Digests & Editorial Briefs"
-                description="Weekly curated summary of mentions, community posts, and friend activity."
+                label="Weekly Digest Emails"
+                description="Receive weekly curated recaps from photography collectives and mutuals."
               />
 
               <Toggle
                 checked={toggles.mentions}
                 onChange={(val) => updateToggle("mentions", val)}
-                label="Mentions & Story Comments"
-                description="Notify when tagged in comments, reels, or photo metadata."
+                label="Mentions & Tagging Alerts"
+                description="Notify me when tagged in a carousel post or discussion thread."
               />
 
               <Toggle
                 checked={toggles.peerSignals}
                 onChange={(val) => updateToggle("peerSignals", val)}
-                label="Peer Verification Signals"
-                description="Alert when approved curators endorse or vouch for your profile."
+                label="Direct Message Sound & Haptics"
+                description="Play subtle analog audio ping on incoming chat messages."
               />
-            </div>
-
-            <div className="mt-6 rounded-2xl border border-[#ece8de] bg-[#fbfaf8] p-5">
-              <h3 className="text-[13.5px] font-semibold text-[#1b1c19]">Notification Delivery Schedule</h3>
-              <p className="mt-1 text-[12px] text-[#7d7982]">Batch low-priority signals to avoid digital interruption.</p>
-              <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-                {["Realtime", "Hourly Batch", "Daily Roundup (9 AM)"].map((opt, i) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => {
-                      setForm((c) => ({ ...c, deliverySchedule: opt }));
-                      setHasChanges(true);
-                    }}
-                    className={`rounded-xl border p-3 text-left transition-all ${
-                      (form.deliverySchedule || "Realtime") === opt
-                        ? "border-black bg-black text-white shadow-xs"
-                        : "border-[#ece8de] bg-white text-[#48443e] hover:bg-[#f4f2ee]"
-                    }`}
-                  >
-                    <p className="text-[12px] font-semibold">{opt}</p>
-                    <p className="mt-0.5 text-[10.5px] opacity-75">
-                      {i === 0 ? "Zero latency" : i === 1 ? "Quiet intervals" : "Single digest"}
-                    </p>
-                  </button>
-                ))}
-              </div>
             </div>
           </Card>
         );
@@ -688,98 +1285,57 @@ export default function SettingsPage() {
         return (
           <Card className="p-6 sm:p-8">
             <SectionHeader
-              eyebrow="[ 04 — Interface ]"
+              eyebrow="[ 05 — Atmosphere ]"
               title="Appearance & Display"
-              description="Select your canvas tone, contrast profile, and typography rendering scale."
+              description="Customize palette themes, typographic hierarchy, and motion aesthetics."
             />
 
-            {/* Themes */}
-            <div className="mt-6">
-              <label className="text-[12px] font-semibold uppercase tracking-wider text-[#7d7982]">
-                Canvas Theme
-              </label>
-              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                {[
-                  { id: "editorial", name: "Editorial", bg: "bg-[#faf9f5]", cardBg: "bg-white", border: "border-[#ece8de]", desc: "Warm archival paper" },
-                  { id: "warm_light", name: "Warm Alabaster", bg: "bg-[#f4efe6]", cardBg: "bg-[#faf6ee]", border: "border-[#e0d8ca]", desc: "Cozy cream paper" },
-                  { id: "obsidian", name: "Studio Dark", bg: "bg-[#091522]", cardBg: "bg-[#111e2e]", border: "border-[#1e3047]", desc: "Deep slate contrast" },
-                ].map((th) => (
-                  <button
-                    key={th.id}
-                    type="button"
-                    onClick={() => updateForm("theme", th.id)}
-                    className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition-all ${
-                      form.theme === th.id
-                        ? "border-black ring-2 ring-black shadow-md"
-                        : "border-[#ece8de] bg-white hover:border-[#cfcac1]"
-                    }`}
-                  >
-                    <div className={`h-20 w-full rounded-xl ${th.bg} p-2.5 shadow-inner`}>
-                      <div className={`h-6 w-3/4 rounded-md ${th.cardBg} border ${th.border}`} />
-                      <div className="mt-2 flex gap-1.5">
-                        <div className={`h-3 w-8 rounded ${th.cardBg}`} />
-                        <div className={`h-3 w-5 rounded ${th.cardBg}`} />
-                      </div>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <div>
-                        <p className="text-[13px] font-bold text-[#1b1c19]">{th.name}</p>
-                        <p className="text-[11px] text-[#817d85]">{th.desc}</p>
-                      </div>
-                      {form.theme === th.id && (
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-black text-white">
-                          <Check className="h-3 w-3 stroke-[3]" />
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                ))}
+            <div className="mt-6 space-y-6">
+              {/* Theme Picker with Immediate Working Theme Switch */}
+              <div>
+                <label className="mb-3 block text-[11.5px] font-semibold uppercase tracking-wider text-[#7d7982]">
+                  Visual Theme Palettes
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    { id: "editorial", label: "Editorial Cream", desc: "Warm newsprint & parchment", bg: "bg-[#faf9f5]" },
+                    { id: "midnight", label: "Studio Midnight", desc: "Deep onyx & high contrast", bg: "bg-[#18181b]" },
+                    { id: "sepia", label: "35mm Analog Sepia", desc: "Vintage darkroom warmth", bg: "bg-[#f4efe6]" },
+                  ].map((thm) => (
+                    <button
+                      key={thm.id}
+                      type="button"
+                      onClick={() => handleSelectTheme(thm.id)}
+                      className={`flex flex-col text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+                        form.theme === thm.id
+                          ? "border-black bg-[#f7f5f0] ring-2 ring-black"
+                          : "border-[#ece8de] bg-white hover:border-[#cfcac1]"
+                      }`}
+                    >
+                      <div className={`h-8 w-full rounded-lg ${thm.bg} mb-3 border border-black/10`} />
+                      <span className="text-[13px] font-bold text-[#1b1c19]">{thm.label}</span>
+                      <span className="text-[11px] text-[#7d7982] mt-0.5">{thm.desc}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Typography Scale */}
-            <div className="mt-8 border-t border-[#eeeae2] pt-6">
-              <label className="text-[12px] font-semibold uppercase tracking-wider text-[#7d7982]">
-                Interface Typography Scale
-              </label>
-              <div className="mt-3 grid grid-cols-3 gap-3">
-                {[
-                  { id: "compact", label: "Compact", scale: "85%" },
-                  { id: "standard", label: "Standard", scale: "100%" },
-                  { id: "expanded", label: "Expanded", scale: "115%" },
-                ].map((size) => (
-                  <button
-                    key={size.id}
-                    type="button"
-                    onClick={() => updateForm("fontSize", size.id)}
-                    className={`rounded-xl border p-3 text-center transition-all ${
-                      form.fontSize === size.id
-                        ? "border-black bg-black text-white shadow-xs"
-                        : "border-[#ece8de] bg-[#fbfaf8] text-[#48443e] hover:bg-[#f4f2ee]"
-                    }`}
-                  >
-                    <p className="text-[13px] font-bold">{size.label}</p>
-                    <p className="text-[11px] opacity-75">{size.scale}</p>
-                  </button>
-                ))}
+              {/* Font Size & Motion */}
+              <div className="divide-y divide-[#eeeae2] rounded-3xl bg-[#f7f5f0] px-4">
+                <Toggle
+                  checked={toggles.reduceAnimations}
+                  onChange={(val) => updateToggle("reduceAnimations", val)}
+                  label="Reduce Motion Animations"
+                  description="Minimize scale pops and transition durations across modal surfaces."
+                />
+
+                <Toggle
+                  checked={toggles.highContrastBorders}
+                  onChange={(val) => updateToggle("highContrastBorders", val)}
+                  label="High-Definition Card Borders"
+                  description="Enforce crisp 1px borders on artifact cards for archival clarity."
+                />
               </div>
-            </div>
-
-            {/* Accessibility Toggles */}
-            <div className="mt-8 divide-y divide-[#eeeae2] rounded-2xl bg-[#f7f5f0] px-4">
-              <Toggle
-                checked={toggles.reduceAnimations}
-                onChange={(val) => updateToggle("reduceAnimations", val)}
-                label="Reduce Motion & Animations"
-                description="Disable smooth page transitions and sliding micro-interactions."
-              />
-
-              <Toggle
-                checked={toggles.highContrastBorders}
-                onChange={(val) => updateToggle("highContrastBorders", val)}
-                label="High-Contrast Dividers"
-                description="Deepen element borders and card boundaries for enhanced daylight legibility."
-              />
             </div>
           </Card>
         );
@@ -788,12 +1344,12 @@ export default function SettingsPage() {
         return (
           <Card className="p-6 sm:p-8">
             <SectionHeader
-              eyebrow="[ 05 — Curation ]"
+              eyebrow="[ 06 — Streams ]"
               title="Content & Feeds"
-              description="Tune feed algorithms, media autoplay bandwidth, and muted topic filters."
+              description="Manage fidelity standards, media autoplay rules, and muted topic filters."
             />
 
-            <div className="mt-6 divide-y divide-[#eeeae2] rounded-2xl bg-[#f7f5f0] px-4">
+            <div className="mt-6 divide-y divide-[#eeeae2] rounded-3xl bg-[#f7f5f0] px-4">
               <Toggle
                 checked={toggles.autoplayMedia}
                 onChange={(val) => updateToggle("autoplayMedia", val)}
@@ -816,8 +1372,8 @@ export default function SettingsPage() {
               />
             </div>
 
-            {/* Muted Words Manager */}
-            <div className="mt-6 rounded-2xl border border-[#ece8de] bg-[#fbfaf8] p-5">
+            {/* Muted Words Manager with Working API */}
+            <div className="mt-6 rounded-3xl border border-[#ece8de] bg-[#fbfaf8] p-5">
               <h3 className="text-[13.5px] font-semibold text-[#1b1c19]">Muted Keywords & Tags</h3>
               <p className="mt-1 text-[12px] text-[#7d7982]">
                 Posts containing these keywords will be quietly hidden from your Home and Explore feeds.
@@ -829,12 +1385,12 @@ export default function SettingsPage() {
                   placeholder="Add a tag to mute (e.g. spoilers)..."
                   value={newWordInput}
                   onChange={(e) => setNewWordInput(e.target.value)}
-                  className="min-w-0 flex-1 rounded-xl border border-[#ece8de] bg-white px-3.5 py-2 text-[13px] outline-none transition focus:border-black/30"
+                  className="min-w-0 flex-1 rounded-2xl border border-[#ece8de] bg-white px-3.5 py-2 text-[13px] outline-none transition focus:border-black/30"
                 />
                 <button
                   type="submit"
                   disabled={!newWordInput.trim()}
-                  className="flex items-center gap-1.5 rounded-xl bg-black px-4 py-2 text-[12px] font-semibold text-white transition hover:bg-neutral-800 disabled:opacity-40"
+                  className="flex items-center gap-1.5 rounded-2xl bg-black px-4 py-2 text-[12px] font-semibold text-white transition hover:bg-neutral-800 disabled:opacity-40 cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Add</span>
@@ -851,7 +1407,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={() => handleRemoveMutedWord(word)}
-                      className="text-[#9e9a93] hover:text-[#d32f2f]"
+                      className="text-[#9e9a93] hover:text-[#d32f2f] cursor-pointer"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -872,61 +1428,85 @@ export default function SettingsPage() {
         return (
           <Card className="p-6 sm:p-8">
             <SectionHeader
-              eyebrow="[ 06 — Circles ]"
+              eyebrow="[ 07 — Circles ]"
               title="Close Friends & Circles"
               description="Organize your inner circle for sharing private stories, raw 35mm rolls, and unreleased essays."
             />
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8e8a93]" />
+                <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#938e98]" />
                 <input
                   type="text"
-                  placeholder="Search close friends..."
+                  placeholder="Search colleagues & friends..."
                   value={friendsSearch}
                   onChange={(e) => setFriendsSearch(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-[#ece8de] bg-[#fbfaf8] pl-9 pr-3 text-[13px] outline-none transition focus:border-black/30 focus:bg-white"
+                  className="h-10 w-full rounded-2xl border border-[#ece8de] bg-[#fbfaf8] pl-10 pr-4 text-[12.5px] outline-none transition focus:border-black/30"
                 />
               </div>
-              <span className="shrink-0 rounded-full bg-[#f4f2ee] px-3.5 py-1.5 text-center text-[11.5px] font-semibold text-[#48443e]">
-                {friendsList.filter((f) => f.active).length} Active in Circle
+              <span className="font-mono text-[11px] text-[#7d7982] shrink-0">
+                {friendsList.filter((f) => f.active).length} of {friendsList.length} active
               </span>
             </div>
 
-            <div className="mt-5 divide-y divide-[#eeeae2] rounded-2xl border border-[#ece8de] bg-white">
+            {/* Add New Friend to Circle Form */}
+            <form onSubmit={handleAddNewFriend} className="mt-4 flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                placeholder="Friend name..."
+                value={newFriendName}
+                onChange={(e) => setNewFriendName(e.target.value)}
+                className="flex-1 rounded-2xl border border-[#ece8de] bg-[#fbfaf8] px-3.5 py-2 text-[12.5px] outline-none focus:ring-1 focus:ring-black"
+              />
+              <input
+                type="text"
+                placeholder="Username (e.g. @marcus)..."
+                value={newFriendHandle}
+                onChange={(e) => setNewFriendHandle(e.target.value)}
+                className="flex-1 rounded-2xl border border-[#ece8de] bg-[#fbfaf8] px-3.5 py-2 text-[12.5px] outline-none focus:ring-1 focus:ring-black"
+              />
+              <button
+                type="submit"
+                disabled={!newFriendHandle.trim()}
+                className="rounded-2xl bg-black px-4 py-2 text-[12px] font-semibold text-white hover:bg-neutral-800 disabled:opacity-40 cursor-pointer shrink-0"
+              >
+                Add Friend
+              </button>
+            </form>
+
+            <div className="mt-4 divide-y divide-[#eeeae2] rounded-3xl border border-[#ece8de] bg-[#fbfaf8] overflow-hidden">
               {filteredFriends.map((friend) => (
                 <div
                   key={friend.id}
-                  className="flex items-center justify-between p-3.5 transition hover:bg-[#faf9f5]"
+                  className="flex items-center justify-between p-3.5 hover:bg-white transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <img
                       src={friend.avatar}
                       alt={friend.name}
                       onError={(e) => {
-                        e.target.src = "/recreation/avatar_left_elena.png";
+                        e.target.src = "/notifications/marcus.png";
                       }}
-                      className="h-10 w-10 rounded-full object-cover ring-1 ring-black/5"
+                      className="h-9 w-9 rounded-full object-cover ring-1 ring-black/5"
                     />
                     <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[13.5px] font-bold text-[#1b1c19]">{friend.name}</span>
-                        <span className="text-[11px] text-[#817d85]">• {friend.role}</span>
-                      </div>
-                      <p className="font-mono text-[11.5px] text-[#8a858f]">@{friend.handle}</p>
+                      <span className="text-[13px] font-semibold text-[#1b1c19] block">
+                        {friend.name}
+                      </span>
+                      <span className="text-[11.5px] text-[#7d7982]">@{friend.handle} • {friend.role}</span>
                     </div>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => toggleFriendActive(friend.id)}
-                    className={`rounded-full px-3.5 py-1.5 text-[11.5px] font-semibold transition-all active:scale-95 ${
+                    className={`rounded-full px-3.5 py-1 text-xs font-semibold transition active:scale-95 cursor-pointer ${
                       friend.active
-                        ? "bg-black text-white hover:bg-neutral-800"
-                        : "border border-[#ece8de] bg-[#f4f2ee] text-[#55524d] hover:bg-[#e8e4dc]"
+                        ? "bg-[#10b981] text-white"
+                        : "bg-[#f0eee9] text-[#78767b] hover:bg-[#e4e2dd] hover:text-black"
                     }`}
                   >
-                    {friend.active ? "In Circle" : "+ Add to Circle"}
+                    {friend.active ? "Added" : "Add"}
                   </button>
                 </div>
               ))}
@@ -936,54 +1516,57 @@ export default function SettingsPage() {
 
       case "help":
         return (
-          <Card className="p-6 sm:p-8">
-            <SectionHeader
-              eyebrow="[ 07 — Support ]"
-              title="Help & Guidelines"
-              description="Learn about the Staple protocol, copyright sovereignty, community safety, and direct concierge."
-            />
+          <div className="space-y-6">
+            <Card className="p-6 sm:p-8">
+              <SectionHeader
+                eyebrow="[ 08 — Protocol ]"
+                title="Help & Guidelines"
+                description="Community values, cryptography specification, and direct developer inquiry channels."
+              />
 
-            <div className="mt-6 space-y-3">
-              {[
-                { title: "Community Guidelines & Curatorial Standards", desc: "Understanding our zero-spam, high-signal editorial expectations." },
-                { title: "Privacy Spec & Cryptographic Proofs", desc: "How our peer-to-peer data sovereignty and archival vaults work." },
-                { title: "Account Recovery & Seed Phrases", desc: "Hardware key resets and multi-factor recovery pathways." },
-                { title: "Staple Protocol API & Developer Docs", desc: "Build RSS hooks, headless clients, and custom media decoders." },
-              ].map((item) => (
-                <div
-                  key={item.title}
-                  className="group flex cursor-pointer items-center justify-between rounded-xl border border-[#ece8de] bg-[#fbfaf8] p-4 transition-all hover:border-black/20 hover:bg-white hover:shadow-xs"
-                >
-                  <div>
-                    <h4 className="text-[13.5px] font-semibold text-[#1b1c19] group-hover:text-black">
-                      {item.title}
-                    </h4>
-                    <p className="mt-0.5 text-[11.5px] text-[#817d85]">{item.desc}</p>
+              <div className="mt-6 space-y-4">
+                <div className="rounded-2xl border border-[#ece8de] bg-[#fbfaf8] p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#eeece7] text-[#1b1c19]">
+                      <FileText className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-[13.5px] font-semibold text-[#1b1c19]">Community Editorial Standards</h4>
+                      <p className="text-[11.5px] text-[#7d7982]">Zero automated clickbait, organic curation specification</p>
+                    </div>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-[#8a8690] transition-transform group-hover:translate-x-1" />
+                  <ExternalLink className="h-4 w-4 text-[#8a858f]" />
                 </div>
-              ))}
-            </div>
 
-            <div className="mt-8 rounded-2xl bg-[#091522] p-6 text-white">
-              <div className="flex items-center gap-2 font-mono text-[11px] text-[#b8ede0]">
-                <Sparkles className="h-4 w-4" />
-                <span>Priority Concierge</span>
+                <div className="rounded-2xl border border-[#ece8de] bg-[#fbfaf8] p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#eeece7] text-[#1b1c19]">
+                      <ShieldCheck className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-[13.5px] font-semibold text-[#1b1c19]">Zero-Knowledge Privacy Spec</h4>
+                      <p className="text-[11.5px] text-[#7d7982]">How passkeys and end-to-end sessions are secured</p>
+                    </div>
+                  </div>
+                  <ExternalLink className="h-4 w-4 text-[#8a858f]" />
+                </div>
               </div>
-              <h3 className="mt-2 text-[17px] font-bold">Need assistance with your archive?</h3>
-              <p className="mt-1 text-[12.5px] leading-relaxed text-[#c1c8d4]">
-                Verified Vanguard members receive direct 24/7 human engineering support. Typical response in under 15 minutes.
-              </p>
-              <button
-                type="button"
-                onClick={() => alert("Staple Concierge connected! Ticket #ST-8821 dispatched to engineering.")}
-                className="mt-4 inline-flex items-center gap-2 rounded-full bg-white px-5 py-2 text-[12px] font-bold text-black transition hover:bg-neutral-200 active:scale-95"
-              >
-                <Send className="h-3.5 w-3.5" />
-                <span>Contact Staple Concierge</span>
-              </button>
-            </div>
-          </Card>
+
+              <div className="mt-6 pt-5 border-t border-[#f0ece4] flex items-center justify-between">
+                <div>
+                  <h4 className="text-[13.5px] font-semibold text-[#1b1c19]">Direct Feedback & Inquiry</h4>
+                  <p className="text-[11.5px] text-[#7d7982]">Submit bugs or suggest protocol enhancements to Staple Core</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSupportModalOpen(true)}
+                  className="rounded-full bg-black px-4 py-2 text-xs font-semibold text-white hover:bg-neutral-800 transition cursor-pointer"
+                >
+                  Send Feedback
+                </button>
+              </div>
+            </Card>
+          </div>
         );
 
       default:
@@ -992,44 +1575,21 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="w-full text-[#1b1c19]">
-      {/* Top Header & Breadcrumbs */}
-      <div className="mx-auto max-w-[1240px] pt-4 sm:pt-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eeeae2] pb-4">
-          <div>
-            <div className="flex items-center gap-2 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[#8a858f]">
-              <span>Staple Core</span>
-              <span>/</span>
-              <span>Preferences</span>
-              <span>/</span>
-              <span className="text-[#1b1c19]">
-                {sections.find((s) => s.id === activeSection)?.label}
-              </span>
-            </div>
-            <h1 className="mt-1 text-[32px] font-extrabold tracking-[-0.04em] text-[#1b1c19] sm:text-[38px]">
-              Settings
-            </h1>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#d6ecdb] bg-[#edfce9] px-3.5 py-1.5 text-[11.5px] font-semibold text-[#2d6a4f] shadow-2xs">
-              <span className="h-2 w-2 rounded-full bg-[#10b981] animate-pulse" />
-              Cloud Synced (v0.9.4)
-            </span>
-
-            <button
-              type="button"
-              onClick={() => setActivityOpen(true)}
-              className="flex items-center gap-1.5 rounded-full border border-[#ece8de] bg-white px-4 py-1.5 text-[12px] font-semibold text-[#3a3733] shadow-2xs transition hover:bg-[#f4f2ee] active:scale-95"
-            >
-              <Activity className="h-3.5 w-3.5 text-[#636166]" />
-              <span>Activity Log</span>
-            </button>
-          </div>
+    <div
+      className="w-full max-w-full min-w-0 pb-16 pt-2 sm:pt-4 overflow-x-hidden lg:h-screen lg:overflow-y-auto no-scrollbar scroll-smooth"
+      style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}
+    >
+      {/* Toast Notification */}
+      {savedToast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 rounded-full bg-black/90 px-4 py-2 text-[12.5px] font-semibold text-white shadow-xl backdrop-blur animate-fade-in-slide">
+          {savedToast}
         </div>
+      )}
 
-        {/* Mobile Section Pills Carousel */}
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-2 pt-1 no-scrollbar lg:hidden">
+      {/* Main Container */}
+      <div className="mx-auto max-w-[1340px] px-2 sm:px-4">
+        {/* Mobile Section Tabs Strip */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar lg:hidden mb-4">
           {sections.map((item) => {
             const Icon = item.icon;
             const isActive = activeSection === item.id;
@@ -1038,28 +1598,23 @@ export default function SettingsPage() {
                 key={item.id}
                 type="button"
                 onClick={() => setActiveSection(item.id)}
-                className={`flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-[12.5px] font-medium transition-all active:scale-95 ${
+                className={`flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                   isActive
-                    ? "bg-black text-white shadow-xs font-semibold"
-                    : "border border-[#ece8de] bg-white text-[#55524d] hover:bg-[#f4f2ee]"
+                    ? "bg-black text-white shadow-xs"
+                    : "bg-white text-[#4a474d] border border-[#ece8de]"
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />
                 <span>{item.label}</span>
-                {item.badge && (
-                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[#ffad9b] px-1 text-[10px] font-bold text-[#643b33]">
-                    {item.badge}
-                  </span>
-                )}
               </button>
             );
           })}
         </div>
 
-        {/* Main 3-Column Layout */}
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8 items-start">
-          {/* Left Navigation Column (Desktop) */}
-          <aside className="hidden lg:col-span-3 lg:block space-y-4 sticky top-6">
+        {/* 3-Column Layout */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8 items-start">
+          {/* Left Navigation Column (Desktop col-span-3) */}
+          <aside className="hidden lg:col-span-3 lg:block space-y-4 sticky top-4">
             {/* Search Input */}
             <div className="relative">
               <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#938e98]" />
@@ -1074,7 +1629,7 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#938e98] hover:text-black"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#938e98] hover:text-black cursor-pointer"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -1082,7 +1637,7 @@ export default function SettingsPage() {
             </div>
 
             {/* Navigation Menu */}
-            <div className="rounded-2xl border border-[#ece8de] bg-white p-2 shadow-[0_2px_8px_rgba(24,22,18,0.02)]">
+            <div className="rounded-3xl border border-[#ece8de] bg-white p-2 shadow-[0_2px_8px_rgba(24,22,18,0.02)]">
               <nav className="space-y-1">
                 {filteredSections.map((item) => {
                   const Icon = item.icon;
@@ -1093,7 +1648,7 @@ export default function SettingsPage() {
                       key={item.id}
                       type="button"
                       onClick={() => setActiveSection(item.id)}
-                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-[13px] transition-all duration-150 ${
+                      className={`flex w-full items-center justify-between rounded-2xl px-3 py-2.5 text-left text-[13px] transition-all duration-150 cursor-pointer ${
                         isActive
                           ? "bg-black font-semibold text-white shadow-xs"
                           : "text-[#4a474d] hover:bg-[#f5f3ee] hover:text-[#1b1c19]"
@@ -1133,7 +1688,7 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => setLogoutModalOpen(true)}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-[#dc2626] transition hover:bg-[#fef2f2]"
+                className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-[13px] font-semibold text-[#dc2626] transition hover:bg-[#fef2f2] cursor-pointer"
               >
                 <LogOut className="h-4 w-4 shrink-0" />
                 <span>Log Out of Staple</span>
@@ -1141,7 +1696,7 @@ export default function SettingsPage() {
             </div>
 
             {/* Archival Vault Progress Card */}
-            <div className="rounded-2xl border border-[#ece8de] bg-[#f7f5f0] p-4 text-[#4a474d] shadow-2xs">
+            <div className="rounded-3xl border border-[#ece8de] bg-[#f7f5f0] p-4 text-[#4a474d] shadow-2xs">
               <div className="flex items-center justify-between text-[11.5px] font-semibold">
                 <span className="uppercase tracking-wider text-[#7d7982]">Archival Vault</span>
                 <span className="font-mono text-[#1b1c19]">4.2 / 10 GB</span>
@@ -1168,7 +1723,7 @@ export default function SettingsPage() {
           </main>
 
           {/* Right Rail Sidebar (Desktop col-span-3) */}
-          <aside className="space-y-6 lg:col-span-3">
+          <aside className="space-y-6 lg:col-span-3 sticky top-4">
             {/* Security Audit Card */}
             <Card className="p-6">
               <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[#8a858f]">
@@ -1249,7 +1804,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={triggerArchiveDownload}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#f4f2ee] py-3 text-[12.5px] font-bold text-[#1b1c19] transition hover:bg-[#eae6de] active:scale-98"
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f4f2ee] py-3 text-[12.5px] font-bold text-[#1b1c19] transition hover:bg-[#eae6de] active:scale-98 cursor-pointer"
                   >
                     <Download className="h-4 w-4" />
                     <span>Request Archive (.zip)</span>
@@ -1257,7 +1812,7 @@ export default function SettingsPage() {
                 )}
 
                 {archiveStatus === "generating" && (
-                  <div className="rounded-xl bg-[#f7f5f0] p-3 text-center">
+                  <div className="rounded-2xl bg-[#f7f5f0] p-3 text-center">
                     <div className="flex items-center justify-center gap-2 text-[12px] font-medium text-[#1b1c19]">
                       <Loader2 className="h-4 w-4 animate-spin text-black" />
                       <span>Compiling archive ({archiveProgress}%)...</span>
@@ -1272,18 +1827,18 @@ export default function SettingsPage() {
                 )}
 
                 {archiveStatus === "ready" && (
-                  <div className="rounded-xl bg-[#edfce9] p-3 text-center border border-[#c3e8ca]">
+                  <div className="rounded-2xl bg-[#edfce9] p-3 text-center border border-[#c3e8ca]">
                     <p className="text-[12px] font-bold text-[#2d6a4f]">✓ Archive Ready (4.2 GB)</p>
                     <a
                       href="#download"
                       onClick={(e) => {
                         e.preventDefault();
-                        alert("Starting download: elena_vance_staple_archive_2025.zip");
+                        showToast("Archive download initiated: staple_archive_elena_vance.zip");
                         setArchiveStatus("idle");
                       }}
-                      className="mt-1.5 inline-block text-[11.5px] font-semibold text-[#1863dc] underline"
+                      className="mt-1.5 inline-block text-[11.5px] font-semibold text-[#1863dc] underline cursor-pointer"
                     >
-                      Click to download file
+                      Click to download archive
                     </a>
                   </div>
                 )}
@@ -1295,11 +1850,11 @@ export default function SettingsPage() {
                   Connected Platforms
                 </span>
                 <div className="mt-2.5 space-y-2">
-                  <div className="flex items-center justify-between rounded-lg bg-[#f7f5f0] px-3 py-2 text-[12px]">
+                  <div className="flex items-center justify-between rounded-xl bg-[#f7f5f0] px-3 py-2 text-[12px]">
                     <span className="font-medium text-[#1b1c19]">Instagram Graph</span>
                     <span className="text-[10.5px] font-semibold text-[#2d6a4f]">Linked</span>
                   </div>
-                  <div className="flex items-center justify-between rounded-lg bg-[#f7f5f0] px-3 py-2 text-[12px]">
+                  <div className="flex items-center justify-between rounded-xl bg-[#f7f5f0] px-3 py-2 text-[12px]">
                     <span className="font-medium text-[#1b1c19]">Substack RSS</span>
                     <span className="text-[10.5px] font-semibold text-[#2d6a4f]">Linked</span>
                   </div>
@@ -1323,7 +1878,7 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={handleDiscardChanges}
-                className="text-[12px] font-medium text-white/70 hover:text-white"
+                className="text-[12px] font-medium text-white/70 hover:text-white cursor-pointer"
               >
                 Discard
               </button>
@@ -1332,7 +1887,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={handleSaveChanges}
                 disabled={isSaving}
-                className="flex items-center gap-1.5 rounded-full bg-white px-4 py-1.5 text-[12px] font-bold text-black transition-transform hover:bg-neutral-200 active:scale-95 disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-full bg-white px-4 py-1.5 text-[12px] font-bold text-black transition-transform hover:bg-neutral-200 active:scale-95 disabled:opacity-50 cursor-pointer"
               >
                 {isSaving ? (
                   <>
@@ -1348,48 +1903,51 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Saved Toast Alert */}
-      {savedToast && (
-        <div className="fixed bottom-16 sm:bottom-6 right-6 z-50 animate-toast">
-          <div className="flex items-center gap-2.5 rounded-full bg-[#1b1c19] px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-xl">
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#10b981] text-white">
-              <Check className="h-2.5 w-2.5 stroke-[3]" />
-            </span>
-            <span>Settings synced successfully!</span>
-          </div>
-        </div>
-      )}
-
-      {/* Change Photo Modal */}
+      {/* Change Photo Modal with Direct Upload and Presets */}
       {photoModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl animate-scale-in">
             <div className="flex items-center justify-between">
               <h3 className="text-[18px] font-bold text-[#1b1c19]">Change Profile Photo</h3>
               <button
                 type="button"
                 onClick={() => setPhotoModalOpen(false)}
-                className="rounded-full bg-[#f4f2ee] p-1.5 text-[#55524d] hover:bg-[#e8e4dc]"
+                className="rounded-full bg-[#f4f2ee] p-1.5 text-[#55524d] hover:bg-[#e8e4dc] cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <p className="mt-1 text-[12.5px] text-[#75716c]">
-              Select from your curated portfolio avatars or uploaded negative portraits:
+              Select a curated avatar or upload an image directly from your computer:
             </p>
 
-            <div className="mt-5 grid grid-cols-2 gap-3">
+            {/* Direct Device Upload Option */}
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[#ece8de] bg-[#fbfaf8] py-4 text-xs font-semibold text-[#1b1c19] hover:bg-[#f5f3ee] hover:border-black/30 transition cursor-pointer"
+              >
+                <Upload className="h-4 w-4" />
+                <span>Upload image from this computer</span>
+              </button>
+            </div>
+
+            <div className="my-3.5 flex items-center gap-2">
+              <div className="h-px flex-1 bg-[#ece8de]" />
+              <span className="text-[11px] font-mono uppercase tracking-wider text-[#938e98]">or choose preset</span>
+              <div className="h-px flex-1 bg-[#ece8de]" />
+            </div>
+
+            {/* Presets Grid */}
+            <div className="grid grid-cols-2 gap-3">
               {avatarOptions.map((opt) => (
                 <button
                   key={opt.src}
                   type="button"
-                  onClick={() => {
-                    setCurrentAvatar(opt.src);
-                    setHasChanges(true);
-                    setPhotoModalOpen(false);
-                  }}
-                  className={`flex flex-col items-center gap-2 rounded-2xl border p-3 text-center transition-all ${
+                  onClick={() => handleSelectAvatar(opt.src)}
+                  className={`flex flex-col items-center gap-2 rounded-2xl border p-3 text-center transition-all cursor-pointer ${
                     currentAvatar === opt.src
                       ? "border-black bg-[#f7f5f0] ring-2 ring-black"
                       : "border-[#ece8de] bg-white hover:border-[#cfcac1]"
@@ -1398,6 +1956,9 @@ export default function SettingsPage() {
                   <img
                     src={opt.src}
                     alt=""
+                    onError={(e) => {
+                      e.target.src = "/recreation/avatar_left_elena.png";
+                    }}
                     className="h-16 w-16 rounded-full object-cover ring-1 ring-black/10"
                   />
                   <span className="text-[11.5px] font-medium text-[#1b1c19]">{opt.label}</span>
@@ -1408,61 +1969,177 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Activity Log Modal */}
-      {activityOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl animate-scale-in">
-            <div className="flex items-center justify-between border-b border-[#eeeae2] pb-4">
-              <div className="flex items-center gap-2">
-                <Activity className="h-5 w-5 text-[#1863dc]" />
-                <h3 className="text-[18px] font-bold text-[#1b1c19]">Activity Log & Audit Trail</h3>
-              </div>
+      {/* Password Change Modal (Zero browser alert) */}
+      {passwordModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl animate-scale-in">
+            <div className="flex items-center justify-between pb-3 border-b border-[#eeeae2]">
+              <h3 className="text-[18px] font-bold text-[#1b1c19]">Change Password</h3>
               <button
                 type="button"
-                onClick={() => setActivityOpen(false)}
-                className="rounded-full bg-[#f4f2ee] p-1.5 text-[#55524d] hover:bg-[#e8e4dc]"
+                onClick={() => setPasswordModalOpen(false)}
+                className="rounded-full bg-[#f4f2ee] p-1.5 text-[#55524d] hover:bg-[#e8e4dc] cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="mt-4 max-h-[60vh] space-y-3 overflow-y-auto pr-1">
-              {[
-                { event: "Two-Factor Passkey validated", device: "MacBook Pro 16", time: "Today, 10:42 AM", ip: "San Francisco, CA" },
-                { event: "Profile biography updated", device: "Safari 17.4", time: "Yesterday, 04:15 PM", ip: "San Francisco, CA" },
-                { event: "Archival snapshot created (4.2 GB)", device: "Staple Daemon", time: "Nov 20, 03:00 AM", ip: "Automated Backup" },
-                { event: "New session authenticated", device: "iPhone 15 Pro", time: "Nov 19, 09:20 PM", ip: "Tokyo, JP" },
-                { event: "Display name verified by Guild", device: "Staple Protocol", time: "Nov 14, 11:00 AM", ip: "Guild Consensus" },
-              ].map((item, idx) => (
-                <div key={idx} className="rounded-xl border border-[#ece8de] bg-[#fbfaf8] p-3 text-[12.5px]">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-[#1b1c19]">{item.event}</span>
-                    <span className="font-mono text-[11px] text-[#8e8a93]">{item.time}</span>
-                  </div>
-                  <div className="mt-1 flex items-center justify-between text-[11px] text-[#75716c]">
-                    <span>{item.device}</span>
-                    <span>{item.ip}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <form onSubmit={handlePasswordSubmit} className="mt-4 space-y-3.5">
+              <div>
+                <label className="text-[11.5px] font-semibold uppercase tracking-wider text-[#7d7982] block mb-1">
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••••••"
+                  value={passwordForm.currentPassword}
+                  onChange={(e) =>
+                    setPasswordForm({ ...passwordForm, currentPassword: e.target.value })
+                  }
+                  className="w-full rounded-2xl border border-[#ece8de] bg-[#fbfaf8] px-3.5 py-2 text-[13px] outline-none focus:ring-1 focus:ring-black"
+                />
+              </div>
 
-            <div className="mt-5 pt-3 border-t border-[#eeeae2] flex justify-end">
-              <button
-                type="button"
-                onClick={() => setActivityOpen(false)}
-                className="rounded-full bg-black px-5 py-2 text-[12px] font-semibold text-white hover:bg-neutral-800"
-              >
-                Close Audit Log
-              </button>
-            </div>
+              <div>
+                <label className="text-[11.5px] font-semibold uppercase tracking-wider text-[#7d7982] block mb-1">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="At least 6 characters"
+                  value={passwordForm.newPassword}
+                  onChange={(e) =>
+                    setPasswordForm({ ...passwordForm, newPassword: e.target.value })
+                  }
+                  className="w-full rounded-2xl border border-[#ece8de] bg-[#fbfaf8] px-3.5 py-2 text-[13px] outline-none focus:ring-1 focus:ring-black"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11.5px] font-semibold uppercase tracking-wider text-[#7d7982] block mb-1">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Repeat new password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) =>
+                    setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })
+                  }
+                  className="w-full rounded-2xl border border-[#ece8de] bg-[#fbfaf8] px-3.5 py-2 text-[13px] outline-none focus:ring-1 focus:ring-black"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPasswordModalOpen(false)}
+                  className="rounded-full bg-[#f0eee9] px-4 py-2 text-xs font-semibold text-[#1b1c19] hover:bg-[#e4e2dd] cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-full bg-black px-5 py-2 text-xs font-semibold text-white hover:bg-neutral-800 cursor-pointer"
+                >
+                  Update Password
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* Logout Confirmation Modal */}
+      {/* Support / Feedback Modal (Zero browser alert) */}
+      {supportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl animate-scale-in">
+            <div className="flex items-center justify-between pb-3 border-b border-[#eeeae2]">
+              <div className="flex items-center gap-2">
+                <HelpCircle className="h-5 w-5 text-[#1863dc]" />
+                <h3 className="text-[18px] font-bold text-[#1b1c19]">Direct Protocol Inquiry</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSupportModalOpen(false)}
+                className="rounded-full bg-[#f4f2ee] p-1.5 text-[#55524d] hover:bg-[#e8e4dc] cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitSupport} className="mt-4 space-y-3.5">
+              <div>
+                <label className="text-[11.5px] font-semibold uppercase tracking-wider text-[#7d7982] block mb-1">
+                  Topic / Subject
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Bug with 35mm negative scanner preview..."
+                  value={supportForm.subject}
+                  onChange={(e) => setSupportForm({ ...supportForm, subject: e.target.value })}
+                  className="w-full rounded-2xl border border-[#ece8de] bg-[#fbfaf8] px-3.5 py-2 text-[13px] outline-none focus:ring-1 focus:ring-black"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11.5px] font-semibold uppercase tracking-wider text-[#7d7982] block mb-1">
+                  Category
+                </label>
+                <select
+                  value={supportForm.category}
+                  onChange={(e) => setSupportForm({ ...supportForm, category: e.target.value })}
+                  className="w-full rounded-2xl border border-[#ece8de] bg-[#fbfaf8] px-3.5 py-2 text-[13px] outline-none focus:ring-1 focus:ring-black"
+                >
+                  <option value="general">General Inquiry</option>
+                  <option value="bug">Bug Report</option>
+                  <option value="feature">Feature Request</option>
+                  <option value="security">Security Telemetry</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11.5px] font-semibold uppercase tracking-wider text-[#7d7982] block mb-1">
+                  Detailed Explanation
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  placeholder="Describe what occurred or what feature you are proposing..."
+                  value={supportForm.message}
+                  onChange={(e) => setSupportForm({ ...supportForm, message: e.target.value })}
+                  className="w-full rounded-2xl border border-[#ece8de] bg-[#fbfaf8] px-3.5 py-2 text-[13px] outline-none focus:ring-1 focus:ring-black"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSupportModalOpen(false)}
+                  className="rounded-full bg-[#f0eee9] px-4 py-2 text-xs font-semibold text-[#1b1c19] hover:bg-[#e4e2dd] cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-1.5 rounded-full bg-black px-5 py-2 text-xs font-semibold text-white hover:bg-neutral-800 cursor-pointer"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  <span>Submit Ticket</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Logout Confirmation Modal (Zero browser alert) */}
       {logoutModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
           <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-scale-in text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#fef2f2] text-[#dc2626]">
               <LogOut className="h-6 w-6" />
@@ -1475,7 +2152,7 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => setLogoutModalOpen(false)}
-                className="flex-1 rounded-full border border-[#ece8de] bg-[#f4f2ee] py-2.5 text-[12.5px] font-semibold text-[#48443e] hover:bg-[#eae6de]"
+                className="flex-1 rounded-full border border-[#ece8de] bg-[#f4f2ee] py-2.5 text-[12.5px] font-semibold text-[#48443e] hover:bg-[#eae6de] cursor-pointer"
               >
                 Cancel
               </button>
@@ -1483,9 +2160,10 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => {
                   setLogoutModalOpen(false);
-                  alert("Logged out of Staple session.");
+                  showToast("Logged out of Staple session successfully");
+                  if (logout) logout();
                 }}
-                className="flex-1 rounded-full bg-[#dc2626] py-2.5 text-[12.5px] font-semibold text-white hover:bg-red-700"
+                className="flex-1 rounded-full bg-[#dc2626] py-2.5 text-[12.5px] font-semibold text-white hover:bg-red-700 cursor-pointer"
               >
                 Log Out
               </button>

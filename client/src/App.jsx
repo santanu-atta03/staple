@@ -11,20 +11,37 @@ import HomePage from "./modules/Home/HomePage";
 import ExplorePage from "./modules/explore/ExplorePage";
 import SettingsPage from "./modules/settings/SettingsPage";
 import BookmarksPage from "./modules/bookmarks/BookmarksPage";
+import { useAuth } from "./context/AuthContext";
 
 export default function App() {
+  const { user } = useAuth();
+
   return (
     <Routes>
-      {/* Public Auth Routes */}
-      {/* <Route path="/login" element={<LoginPage />} /> */}
-      {/* <Route path="/register" element={<RegisterPage />} /> */}
+      {/* Public Auth Routes: if already authenticated, take directly to home */}
+      <Route
+        path="/signin"
+        element={user ? <Navigate to="/" replace /> : <LoginPage />}
+      />
+      <Route
+        path="/login"
+        element={<Navigate to="/signin" replace />}
+      />
+      <Route
+        path="/signup"
+        element={user ? <Navigate to="/" replace /> : <RegisterPage />}
+      />
+      <Route
+        path="/register"
+        element={<Navigate to="/signup" replace />}
+      />
 
       {/* Authenticated Shell */}
       <Route
         element={
-          // <ProtectedRoute>
+          <ProtectedRoute>
             <AppLayout />
-          // </ProtectedRoute>
+          </ProtectedRoute>
         }
       >
         <Route path="/" element={<HomePage />} />

@@ -9,7 +9,7 @@ router.post(
   rateLimit("comment", 30, 60),
   commentController.createComment
 );
-router.get("/:postId", commentController.getPostComments);
+router.get("/:postId", authMiddleware.optionalAuthenticate, commentController.getPostComments);
 router.delete("/:commentId", authMiddleware, commentController.removeComment);
 
 module.exports = router;

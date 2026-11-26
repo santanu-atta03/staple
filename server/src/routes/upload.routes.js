@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const upload = require("../middleware/upload.middleware");
 const cloudinary = require("../config/cloudinary");
-const store = require("../config/store");
+const authenticate = require("../middleware/auth.middleware");
 
 // Helper to check if real Cloudinary credentials are provided
 const isCloudinaryConfigured = () => {
@@ -21,7 +21,7 @@ const isCloudinaryConfigured = () => {
 };
 
 // Cloudinary Stream Upload
-const uploadBufferToCloudinary = (buffer, folder = "staple_uploads") =>
+const uploadBufferToCloudinary = (buffer, folder) =>
   new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       { folder, resource_type: "auto" },
@@ -34,8 +34,8 @@ const uploadBufferToCloudinary = (buffer, folder = "staple_uploads") =>
   });
 
 // Save locally as reliable fallback
-const saveBufferLocally = (file) => {
-  const uploadDir = path.join(__dirname, "../../../client/public/uploads");
+const saveBufferLocally = (file, userId) => {
+  const uploadDir = path.join(__dirname, "../../../client/public/uploads", userId);
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
@@ -47,7 +47,7 @@ const saveBufferLocally = (file) => {
   fs.writeFileSync(filePath, file.buffer);
 
   return {
-    url: `/uploads/${fileName}`,
+    url: `/uploads/${userId}/${fileName}`,
     publicId: fileName,
     type: file.mimetype.startsWith("video/") ? "video" : "image",
   };
@@ -56,6 +56,7 @@ const saveBufferLocally = (file) => {
 // Upload multiple files or single file
 router.post(
   "/",
+  authenticate,
   upload.array("files", 10),
   async (req, res, next) => {
     try {
@@ -68,7 +69,10 @@ router.post(
       for (const file of req.files) {
         if (isCloudinaryConfigured()) {
           try {
-            const result = await uploadBufferToCloudinary(file.buffer, "staple_uploads");
+            const result = await uploadBufferToCloudinary(
+              file.buffer,
+              `staple_uploads/${req.user.id}`
+            );
             media.push({
               url: result.secure_url,
               publicId: result.public_id,
@@ -84,7 +88,7 @@ router.post(
         }
 
         // Fallback or default local save
-        const localResult = saveBufferLocally(file);
+        const localResult = saveBufferLocally(file, req.user.id);
         media.push(localResult);
       }
 

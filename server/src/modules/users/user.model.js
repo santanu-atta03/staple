@@ -23,7 +23,6 @@ const userSchema = new mongoose.Schema(
 
     passwordHash: {
       type: String,
-      required: true,
       select: false,
     },
 
@@ -31,6 +30,26 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       maxlength: 60,
+      default: "",
+    },
+
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
+
+    googleSubject: {
+      type: String,
+      unique: true,
+      sparse: true,
+      select: false,
+    },
+
+    appleSubject: {
+      type: String,
+      unique: true,
+      sparse: true,
+      select: false,
     },
 
     bio: {
@@ -39,9 +58,32 @@ const userSchema = new mongoose.Schema(
       default: "",
     },
 
+    website: {
+      type: String,
+      maxlength: 2048,
+      default: "",
+    },
+
+    location: {
+      type: String,
+      maxlength: 120,
+      default: "",
+    },
+
+    pronouns: {
+      type: String,
+      maxlength: 40,
+      default: "",
+    },
+
+    cover: {
+      type: String,
+      default: "",
+    },
+
     avatar: {
       type: String,
-      default: null,
+      default: "/default-avatar.svg",
     },
 
     followersCount: {
@@ -70,8 +112,5 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
-
-userSchema.index({ username: 1 }, { unique: true });
-userSchema.index({ email: 1 }, { unique: true });
 
 module.exports = mongoose.model("User", userSchema);

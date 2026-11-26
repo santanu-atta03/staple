@@ -25,6 +25,17 @@ const postSchema = new mongoose.Schema(
       },
     ],
 
+    tags: {
+      type: [String],
+      default: [],
+    },
+
+    location: {
+      type: String,
+      maxlength: 120,
+      default: "",
+    },
+
     likesCount: {
       type: Number,
       default: 0,

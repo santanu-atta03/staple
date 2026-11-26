@@ -5,71 +5,134 @@ const api = axios.create({
   withCredentials: true,
 });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("accessToken");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
+let accessToken =
+  typeof window !== "undefined"
+    ? localStorage.getItem("staple_access_token") || null
+    : null;
+let authGeneration = 0;
+const pendingRequests = new Set();
 let isRefreshing = false;
 let failedQueue = [];
 
+export const setAccessToken = (token) => {
+  accessToken = token || null;
+  if (typeof window !== "undefined") {
+    if (token) {
+      localStorage.setItem("staple_access_token", token);
+    } else {
+      localStorage.removeItem("staple_access_token");
+    }
+  }
+};
+
+export const invalidateUserRequests = () => {
+  authGeneration += 1;
+  for (const controller of pendingRequests) controller.abort();
+  pendingRequests.clear();
+};
+
 const processQueue = (error, token = null) => {
-  failedQueue.forEach((prom) => {
-    if (error) prom.reject(error);
-    else prom.resolve(token);
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) reject(error);
+    else resolve(token);
   });
   failedQueue = [];
 };
 
+api.interceptors.request.use((config) => {
+  if (!config.signal || config.signal.aborted) {
+    const controller = new AbortController();
+    config.signal = controller.signal;
+    config.__requestController = controller;
+    pendingRequests.add(controller);
+  }
+  config.__authGeneration = authGeneration;
+  if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
+  else delete config.headers.Authorization;
+  return config;
+});
+
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const controller = response.config.__requestController;
+    if (controller) pendingRequests.delete(controller);
+    if (response.config.__authGeneration !== authGeneration) {
+      return Promise.reject(new axios.CanceledError("The active account changed"));
+    }
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
-
-    if (
-      error.response?.status === 401 &&
-      !originalRequest._retry &&
-      !originalRequest.url.includes("/auth/login") &&
-      !originalRequest.url.includes("/auth/refresh")
-    ) {
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        }).then((newToken) => {
-          originalRequest.headers.Authorization = `Bearer ${newToken}`;
-          return api(originalRequest);
-        });
-      }
-
-      originalRequest._retry = true;
-      isRefreshing = true;
-
-      try {
-        const { data } = await axios.post(
-          "/api/v1/auth/refresh",
-          {},
-          { withCredentials: true }
-        );
-        const newAccessToken = data.accessToken;
-        localStorage.setItem("accessToken", newAccessToken);
-        processQueue(null, newAccessToken);
-
-        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-        return api(originalRequest);
-      } catch (refreshError) {
-        processQueue(refreshError, null);
-        localStorage.removeItem("accessToken");
-        window.location.href = "/login";
-        return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
-      }
+    const controller = originalRequest?.__requestController;
+    if (controller) pendingRequests.delete(controller);
+    if (!originalRequest || axios.isCancel(error)) return Promise.reject(error);
+    if (originalRequest.__authGeneration !== authGeneration) {
+      return Promise.reject(new axios.CanceledError("The active account changed"));
     }
 
-    return Promise.reject(error);
+    const isAuthRequest = /\/auth\/(login|register-initiate|verify-otp|resend-otp|google|apple|refresh|logout)/.test(
+      originalRequest.url || ""
+    );
+    if (
+      error.response?.status !== 401 ||
+      !accessToken ||
+      originalRequest._retry ||
+      isAuthRequest
+    ) {
+      return Promise.reject(error);
+    }
+
+    if (isRefreshing) {
+      return new Promise((resolve, reject) => {
+        failedQueue.push({ resolve, reject });
+      }).then((newToken) => {
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        originalRequest.signal = undefined;
+        return api(originalRequest);
+      });
+    }
+
+    originalRequest._retry = true;
+    isRefreshing = true;
+    const requestGeneration = authGeneration;
+
+    try {
+      const { data } = await axios.post(
+        "/api/v1/auth/refresh",
+        {},
+        { withCredentials: true }
+      );
+      if (requestGeneration !== authGeneration) {
+        throw new axios.CanceledError("The active account changed");
+      }
+      const newAccessToken = data.accessToken || data.data?.accessToken;
+      if (!newAccessToken) throw new Error("No access token returned from refresh");
+      accessToken = newAccessToken;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("staple_access_token", newAccessToken);
+      }
+      processQueue(null, newAccessToken);
+
+      originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+      originalRequest.signal = undefined;
+      return api(originalRequest);
+    } catch (refreshError) {
+      processQueue(refreshError, null);
+      if (
+        refreshError.response?.status === 401 ||
+        refreshError.response?.status === 403
+      ) {
+        if (requestGeneration === authGeneration) {
+          accessToken = null;
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("staple_access_token");
+          }
+        }
+      }
+      return Promise.reject(refreshError);
+    } finally {
+      isRefreshing = false;
+    }
   }
 );
 

@@ -38,14 +38,4 @@ followSchema.index({
   createdAt: -1,
 });
 
-followSchema.index(
-  {
-    followerId: 1,
-    followingId: 1
-  },
-  {
-    unique: true
-  }
-);
-
 module.exports = mongoose.model("Follow", followSchema);

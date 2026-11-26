@@ -167,11 +167,14 @@ export default function BookmarksPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <img
-                        src={post.authorId?.avatar || "/recreation/avatar_left_elena_hires.png"}
-                        alt={post.authorId?.name}
+                        src={
+                          post.authorId?.avatar ||
+                          `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(post.authorId?.username || "curator")}`
+                        }
+                        alt={post.authorId?.name || "Curator"}
                         className="h-10 w-10 rounded-full object-cover ring-1 ring-black/5"
                         onError={(e) => {
-                          e.target.src = "/recreation/avatar_left_elena.png";
+                          e.target.src = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(post.authorId?.username || "curator")}`;
                         }}
                       />
                       <div>

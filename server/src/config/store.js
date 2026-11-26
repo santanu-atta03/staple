@@ -2,118 +2,34 @@ const fs = require("fs");
 const path = require("path");
 
 const DB_FILE = path.join(__dirname, "../../data/db.json");
+const requireUserId = (userId) => {
+  const uid = userId?.toString();
+  if (!uid) throw new Error("Authenticated user ID is required");
+  return uid;
+};
+
 
 const defaultInitialState = {
   posts: [],
-  stories: [
-    {
-      id: "your-story",
-      name: "Your story",
-      avatar: "/recreation/avatar_left_elena_hires.png",
-      fallback: "/recreation/avatar_left_elena.png",
-      isYours: true,
-    },
-  ],
+  stories: [],
   following: [],
   bookmarks: [],
   drafts: [],
-  currentUser: {
-    _id: "user_elena_vance",
-    name: "Elena Vance",
-    username: "elenavance",
-    avatar: "/recreation/avatar_left_elena_hires.png",
-    fallbackAvatar: "/recreation/avatar_left_elena.png",
-    isVerified: true,
-    roleTag: "Creative Vanguard",
-    pronouns: "she/her",
-    bio: "Visual designer & street photographer based between SF and Tokyo. Exploring spatial interfaces, slow coffee rituals, and high-fidelity 35mm grain. Founder at @filmphotocollective.",
-    website: "https://elenavance.design",
-    location: "San Francisco, CA & Tokyo, JP",
-    joined: "Joined Staple March 2024",
-    followingCount: 0,
-    followersCount: 0,
-    postsCount: 0,
-  },
-  people: [
-    {
-      id: "marcus",
-      name: "Marcus Chen",
-      username: "marcus_v",
-      avatar: "/recreation/avatar_marcus_hires.png",
-      fallback: "/recreation/avatar_marcus.png",
-      isVerified: true,
-      subtitle: "14 mutual friends",
-      isFollowing: false,
-      bio: "Analog street photography • Leica M6 • Tokyo & SF",
-    },
-    {
-      id: "sarah",
-      name: "Sarah Lin",
-      username: "sarah_lin",
-      avatar: "/recreation/avatar_sarah_lin_hires.png",
-      fallback: "/recreation/avatar_sarah_lin.png",
-      isVerified: false,
-      subtitle: "8 mutual friends",
-      isFollowing: false,
-      bio: "Typography, book design & architecture in Copenhagen.",
-    },
-    {
-      id: "karan",
-      name: "Karan Varma",
-      username: "karan.v",
-      avatar: null,
-      initials: "KV",
-      isVerified: true,
-      subtitle: "Suggested creator",
-      isFollowing: false,
-      bio: "Spatial audio engineer & experimental synthesist.",
-    },
-  ],
-  groups: [
-    {
-      id: "photo",
-      name: "Film Photography Club",
-      category: "Creative Arts",
-      description: "Dedicated to analog capture, darkroom techniques, and 35mm / medium format visual essays.",
-      members: "18.4K members • 12 posts/day",
-      memberCount: 18420,
-      joined: false,
-      isPrivate: false,
-      icon: "camera",
-      discussions: [
-        { id: "disc_1", title: "Best lab for Kodak Portra 400 push processing in SF?", author: "Elena Vance", replies: 14 },
-        { id: "disc_2", title: "Ilford HP5+ grain comparisons in Rodinal 1:50", author: "Marcus Chen", replies: 28 },
-      ],
-    },
-    {
-      id: "hikers",
-      name: "Urban Hikers & Explorers",
-      category: "Outdoors & Adventure",
-      description: "Documenting brutalist concrete structures, hidden urban waterways, and high-altitude rooftop views.",
-      members: "9.2K members • 8 friends are in",
-      memberCount: 9240,
-      joined: false,
-      isPrivate: false,
-      icon: "footprints",
-      discussions: [
-        { id: "disc_3", title: "Twin Peaks night ascent & long exposure meetup", author: "Julian Thorne", replies: 19 },
-      ],
-    },
-    {
-      id: "spatial",
-      name: "Spatial Interface Guild",
-      category: "Design & Technology",
-      description: "Exploring post-glass computing, ambient typography, and tactile UI patterns.",
-      members: "6.1K members • 5 posts/day",
-      memberCount: 6150,
-      joined: true,
-      isPrivate: true,
-      icon: "layers",
-      discussions: [
-        { id: "disc_4", title: "Dynamic blur shaders in Safari 18 vs Chromium", author: "Elena Vance", replies: 32 },
-      ],
-    },
-  ],
+  notifications: [],
+  notificationSidebar: { friendRequests: [], birthdays: [], suggestedFriends: [] },
+  notes: [],
+  conversations: [],
+  currentUser: null,
+  legacyCurrentUser: null,
+  settings: {},
+  highlights: [],
+  profilePosts: [],
+  people: [],
+  groups: [],
+  explorePosts: [],
+  audioTrends: [],
+  creators: [],
+  communities: [],
 };
 
 class PersistentStore {
@@ -126,19 +42,70 @@ class PersistentStore {
       if (fs.existsSync(DB_FILE)) {
         const raw = fs.readFileSync(DB_FILE, "utf-8");
         const parsed = JSON.parse(raw);
+
+        // Ensure per-user isolation dictionaries exist
+        const userSettings = parsed.userSettings || {};
+        const userBookmarks = parsed.userBookmarks || {};
+        const userLikes = parsed.userLikes || {};
+        const userFollowing = parsed.userFollowing || {};
+        const userHighlights = parsed.userHighlights || {};
+        const userNotes = parsed.userNotes || {};
+
+        const recordsWithoutDemoFixtures = (key) =>
+          (Array.isArray(parsed[key]) ? parsed[key] : []).filter(
+            (record) => !DEMO_RECORD_IDS[key]?.has(String(record.id || record._id))
+          );
+        const notifications = recordsWithoutDemoFixtures("notifications");
+        const conversations = recordsWithoutDemoFixtures("conversations");
+
         return {
           ...defaultInitialState,
           ...parsed,
-          currentUser: {
-            ...defaultInitialState.currentUser,
-            ...(parsed.currentUser || {}),
+          userSettings,
+          userBookmarks,
+          userLikes,
+          userFollowing,
+          userHighlights,
+          userNotes,
+          stories: recordsWithoutDemoFixtures("stories"),
+          notifications,
+          conversations,
+          notes: recordsWithoutDemoFixtures("notes"),
+          highlights: recordsWithoutDemoFixtures("highlights"),
+          profilePosts: recordsWithoutDemoFixtures("profilePosts"),
+          legacyCurrentUser: parsed.legacyCurrentUser || parsed.currentUser || null,
+          explorePosts: [],
+          audioTrends: [],
+          creators: [],
+          communities: [],
+          people: [],
+          groups: Array.isArray(parsed.groups)
+            ? parsed.groups.filter((group) => group?.ownerId)
+            : [],
+          following: [],
+          bookmarks: [],
+          notes: [],
+          notificationSidebar: {
+            friendRequests: [],
+            birthdays: [],
+            suggestedFriends: [],
           },
+          settings: {},
+          users: Array.isArray(parsed.users) ? parsed.users : [],
+          currentUser: null,
+          legacyCurrentUser: null,
         };
       }
     } catch (err) {
       console.warn("Could not load db.json, creating new database instance:", err.message);
     }
     const fresh = JSON.parse(JSON.stringify(defaultInitialState));
+    fresh.userSettings = {};
+    fresh.userBookmarks = {};
+    fresh.userLikes = {};
+    fresh.userFollowing = {};
+    fresh.userHighlights = {};
+    fresh.userNotes = {};
     this.saveData(fresh);
     return fresh;
   }
@@ -179,14 +146,22 @@ class PersistentStore {
     return this.data.bookmarks;
   }
 
-  getFeed(tab = "for-you", query = "") {
-    let list = this.data.posts;
+  getFeed(tab = "for-you", query = "", userId = null) {
+    const uid = userId?.toString();
+    let list = (this.data.posts || []).filter(
+      (post) =>
+        !post.visibility ||
+        post.visibility === "public" ||
+        post.authorId?._id?.toString() === uid
+    );
 
     if (tab === "following") {
-      const followedSet = new Set(this.data.following);
+      const followingList = this.data.userFollowing?.[uid] || [];
+      const followedSet = new Set(followingList);
+      const currentUsername = this.findUser(uid)?.username;
       list = list.filter((p) => {
         const authorHandle = p.authorId?.username || p.authorId?.id || p.authorId?._id;
-        return followedSet.has(authorHandle) || p.authorId?.username === this.currentUser.username;
+        return followedSet.has(authorHandle) || p.authorId?.username === currentUsername;
       });
     }
 
@@ -202,7 +177,14 @@ class PersistentStore {
       );
     }
 
-    return list;
+    const likedSet = new Set(this.data.userLikes?.[uid] || []);
+    const bookmarkedSet = new Set(this.data.userBookmarks?.[uid] || []);
+
+    return list.map((p) => ({
+      ...p,
+      isLiked: likedSet.has(p._id),
+      isSaved: bookmarkedSet.has(p._id),
+    }));
   }
 
   getPostById(postId) {
@@ -210,24 +192,22 @@ class PersistentStore {
   }
 
   createPost({ authorId, content, media = [], tags = [], location = "", visibility = "public" }) {
-    const author =
-      typeof authorId === "object" && authorId.name
-        ? authorId
-        : this.currentUser;
+    const author = authorId;
+    if (!author?._id && !author?.id) return null;
 
     const extractedTags = tags.length > 0
       ? tags
       : (content.match(/#[a-zA-Z0-9_]+/g) || []);
 
     const newPost = {
-      _id: "post_" + Date.now(),
+      _id: `post_${require("crypto").randomUUID()}`,
       authorId: {
-        _id: author._id || "user_elena_vance",
-        name: author.name || "Elena Vance",
-        username: author.username || "elenavance",
-        avatar: author.avatar || "/recreation/avatar_left_elena_hires.png",
-        fallbackAvatar: "/recreation/avatar_left_elena.png",
-        isVerified: author.isVerified ?? true,
+        _id: (author._id || author.id).toString(),
+        name: author.name || author.fullName || author.username,
+        username: author.username,
+        avatar: author.avatar || "/default-avatar.svg",
+        fallbackAvatar: author.avatar || "/default-avatar.svg",
+        isVerified: false,
       },
       time: "Just now",
       location: location || "",
@@ -246,14 +226,20 @@ class PersistentStore {
     };
 
     this.data.posts.unshift(newPost);
-    this.data.currentUser.postsCount = (this.data.currentUser.postsCount || 0) + 1;
+    const owner = this.findUser(author._id || author.id);
+    if (owner) owner.postsCount = (owner.postsCount || 0) + 1;
     this.saveData();
     return newPost;
   }
 
-  updatePost(postId, updates) {
+  ownsPost(post, userId) {
+    const ownerId = post?.authorId?._id || post?.authorId?.id || post?.authorId;
+    return Boolean(userId && ownerId?.toString() === userId.toString());
+  }
+
+  updatePost(postId, updates, userId) {
     const post = this.getPostById(postId);
-    if (!post) return null;
+    if (!post || !this.ownsPost(post, userId)) return null;
 
     if (updates.content !== undefined) post.content = updates.content.trim();
     if (updates.tags !== undefined) post.tags = updates.tags;
@@ -264,24 +250,40 @@ class PersistentStore {
     return post;
   }
 
-  deletePost(postId) {
+  deletePost(postId, userId) {
     const idx = this.data.posts.findIndex((p) => p._id === postId);
-    if (idx !== -1) {
+    if (idx !== -1 && this.ownsPost(this.data.posts[idx], userId)) {
       this.data.posts.splice(idx, 1);
-      this.data.bookmarks = this.data.bookmarks.filter((id) => id !== postId);
-      this.data.currentUser.postsCount = Math.max(0, (this.data.currentUser.postsCount || 1) - 1);
+      for (const bookmarks of Object.values(this.data.userBookmarks || {})) {
+        const bookmarkIndex = bookmarks.indexOf(postId);
+        if (bookmarkIndex !== -1) bookmarks.splice(bookmarkIndex, 1);
+      }
+      const ownerId = userId.toString();
+      const owner = this.findUser(ownerId);
+      if (owner) owner.postsCount = Math.max(0, (owner.postsCount || 1) - 1);
       this.saveData();
       return true;
     }
     return false;
   }
 
-  toggleLike(postId) {
+  toggleLike(postId, userId = null) {
     const post = this.getPostById(postId);
     if (!post) return null;
 
-    post.isLiked = !post.isLiked;
-    post.likesCount = Math.max(0, (post.likesCount || 0) + (post.isLiked ? 1 : -1));
+    const uid = userId?.toString();
+    if (!uid) return null;
+    if (!this.data.userLikes) this.data.userLikes = {};
+    if (!Array.isArray(this.data.userLikes[uid])) this.data.userLikes[uid] = [];
+
+    const isCurrentlyLiked = this.data.userLikes[uid].includes(postId);
+    if (isCurrentlyLiked) {
+      this.data.userLikes[uid] = this.data.userLikes[uid].filter((id) => id !== postId);
+      post.likesCount = Math.max(0, (post.likesCount || 0) - 1);
+    } else {
+      this.data.userLikes[uid].push(postId);
+      post.likesCount = (post.likesCount || 0) + 1;
+    }
 
     if (post.likedBy) {
       post.likedBy.othersCount = post.likesCount;
@@ -290,46 +292,56 @@ class PersistentStore {
     this.saveData();
     return {
       postId,
-      isLiked: post.isLiked,
+      isLiked: !isCurrentlyLiked,
       likesCount: post.likesCount,
     };
   }
 
-  toggleBookmark(postId) {
-    const post = this.getPostById(postId);
+  toggleBookmark(postId, userId = null) {
+    const post = this.getPostById(postId) || (this.data.explorePosts || []).find((e) => e._id === postId);
     if (!post) return null;
 
-    post.isSaved = !post.isSaved;
-    if (post.isSaved) {
-      if (!this.data.bookmarks.includes(postId)) this.data.bookmarks.push(postId);
+    const uid = userId?.toString();
+    if (!uid) return null;
+    if (!this.data.userBookmarks) this.data.userBookmarks = {};
+    if (!Array.isArray(this.data.userBookmarks[uid])) this.data.userBookmarks[uid] = [];
+
+    const isCurrentlySaved = this.data.userBookmarks[uid].includes(postId);
+    if (isCurrentlySaved) {
+      this.data.userBookmarks[uid] = this.data.userBookmarks[uid].filter((id) => id !== postId);
     } else {
-      this.data.bookmarks = this.data.bookmarks.filter((id) => id !== postId);
+      this.data.userBookmarks[uid].push(postId);
     }
 
     this.saveData();
     return {
       postId,
-      isSaved: post.isSaved,
-      bookmarksCount: this.data.bookmarks.length,
+      isSaved: !isCurrentlySaved,
+      bookmarksCount: this.data.userBookmarks[uid].length,
     };
   }
 
-  getBookmarkedPosts() {
-    const bookmarkSet = new Set(this.data.bookmarks);
-    return this.data.posts.filter((p) => bookmarkSet.has(p._id));
+  getBookmarkedPosts(userId = null) {
+    const uid = userId?.toString();
+    if (!uid) return [];
+    const bookmarkSet = new Set(this.data.userBookmarks?.[uid] || []);
+    const all = [...(this.data.posts || []), ...(this.data.explorePosts || [])];
+    return all.filter((p) => bookmarkSet.has(p._id));
   }
 
   addComment(postId, { user, text }) {
     const post = this.getPostById(postId);
     if (!post) return null;
 
-    const author = user || this.currentUser;
+    const author = user;
+    if (!author?._id && !author?.id) return null;
     const newComment = {
       _id: "comm_" + Date.now(),
       author: {
-        name: author.name || "Elena Vance",
-        username: author.username || "elenavance",
-        avatar: author.avatar || "/recreation/avatar_left_elena_hires.png",
+        userId: (author._id || author.id).toString(),
+        name: author.name || author.fullName || author.username,
+        username: author.username,
+        avatar: author.avatar || "/default-avatar.svg",
       },
       content: text.trim(),
       createdAt: "Just now",
@@ -355,13 +367,15 @@ class PersistentStore {
     const comment = post.comments.find((c) => c._id === commentId);
     if (!comment) return null;
 
-    const author = user || this.currentUser;
+    const author = user;
+    if (!author?._id && !author?.id) return null;
     const reply = {
       _id: "reply_" + Date.now(),
       author: {
-        name: author.name || "Elena Vance",
-        username: author.username || "elenavance",
-        avatar: author.avatar || "/recreation/avatar_left_elena_hires.png",
+        userId: (author._id || author.id).toString(),
+        name: author.name || author.fullName || author.username,
+        username: author.username,
+        avatar: author.avatar || "/default-avatar.svg",
       },
       content: text.trim(),
       createdAt: "Just now",
@@ -379,11 +393,16 @@ class PersistentStore {
     };
   }
 
-  deleteComment(postId, commentId) {
+  deleteComment(postId, commentId, userId) {
     const post = this.getPostById(postId);
     if (!post || !post.comments) return false;
 
     const initialLen = post.comments.length;
+    const comment = post.comments.find((item) => item._id === commentId);
+    if (
+      !comment ||
+      (comment.userId !== userId?.toString() && !this.ownsPost(post, userId))
+    ) return false;
     post.comments = post.comments.filter((c) => c._id !== commentId);
 
     if (post.comments.length < initialLen) {
@@ -399,26 +418,29 @@ class PersistentStore {
     return post ? post.comments || [] : [];
   }
 
-  votePoll(postId, optionId) {
+  votePoll(postId, optionId, userId) {
     const post = this.getPostById(postId);
-    if (!post || !post.poll) return null;
+    const uid = userId?.toString();
+    if (!post || !post.poll || !uid) return null;
 
     const poll = post.poll;
     const opt = poll.options.find((o) => o.id === optionId);
     if (opt) {
-      if (poll.selectedOption && poll.selectedOption !== optionId) {
-        const prevOpt = poll.options.find((o) => o.id === poll.selectedOption);
+      if (!poll.votesByUser) poll.votesByUser = {};
+      const previousOptionId = poll.votesByUser[uid];
+      if (previousOptionId && previousOptionId !== optionId) {
+        const prevOpt = poll.options.find((o) => o.id === previousOptionId);
         if (prevOpt && prevOpt.votes > 0) prevOpt.votes -= 1;
       }
-      if (poll.selectedOption !== optionId) {
+      if (previousOptionId !== optionId) {
         opt.votes += 1;
-        poll.totalVotes += 1;
+        if (!previousOptionId) poll.totalVotes += 1;
       }
-      poll.selectedOption = optionId;
+      poll.votesByUser[uid] = optionId;
     }
 
     this.saveData();
-    return poll;
+    return { ...poll, selectedOption: poll.votesByUser[uid] || null };
   }
 
   toggleAudio(postId) {
@@ -431,7 +453,7 @@ class PersistentStore {
   }
 
   // Stories
-  getStories() {
+  getStories(userId) {
     // Filter expired stories (older than 24 hours)
     const now = Date.now();
     const dayMs = 24 * 60 * 60 * 1000;
@@ -440,28 +462,41 @@ class PersistentStore {
       if (!s.createdAt) return true;
       return now - new Date(s.createdAt).getTime() < dayMs;
     });
-    return this.data.stories;
+    const uid = userId?.toString();
+    return this.data.stories.map((story) => ({
+      ...story,
+      isYours: Boolean(uid && story.authorId?.toString() === uid),
+      isViewed: Boolean(uid && story.viewedBy?.includes(uid)),
+    }));
   }
 
-  viewStory(storyId) {
+  viewStory(storyId, userId) {
+    const uid = userId?.toString();
+    if (!uid) return null;
     const story = this.data.stories.find((s) => s.id === storyId);
     if (story) {
-      story.isViewed = true;
+      if (!Array.isArray(story.viewedBy)) story.viewedBy = [];
+      if (!story.viewedBy.includes(uid)) story.viewedBy.push(uid);
       this.saveData();
     }
-    return story;
+    return story ? { ...story, isYours: story.authorId?.toString() === uid, isViewed: true } : null;
   }
 
-  addStory({ name, avatar, mediaUrl, caption }) {
+  addStory({ mediaUrl, caption }, user) {
+    const uid = user?._id?.toString() || user?.id?.toString();
+    if (!uid) return null;
     const newStory = {
-      id: "story_" + Date.now(),
-      name: name || this.currentUser.username,
-      avatar: avatar || this.currentUser.avatar,
-      fallback: this.currentUser.fallbackAvatar,
+      id: `story_${require("crypto").randomUUID()}`,
+      authorId: uid,
+      name: user.username,
+      username: user.username,
+      avatar: user.avatar || "/default-avatar.svg",
+      fallback: user.avatar || "/default-avatar.svg",
       mediaUrl: mediaUrl || "/profile/post_1_kyoto_lanterns.png",
       caption: caption || "",
       isYours: true,
       isViewed: false,
+      viewedBy: [],
       createdAt: new Date().toISOString(),
     };
     this.data.stories.push(newStory);
@@ -469,8 +504,13 @@ class PersistentStore {
     return newStory;
   }
 
-  deleteStory(storyId) {
-    this.data.stories = this.data.stories.filter((s) => s.id !== storyId || s.isYours === false);
+  deleteStory(storyId, userId) {
+    const uid = userId?.toString();
+    const story = this.data.stories.find(
+      (item) => item.id === storyId && item.authorId?.toString() === uid
+    );
+    if (!story) return false;
+    this.data.stories = this.data.stories.filter((s) => s.id !== storyId);
     this.saveData();
     return true;
   }
@@ -499,17 +539,24 @@ class PersistentStore {
   }
 
   // Groups
-  getGroups() {
-    return this.data.groups;
+  getGroups(userId) {
+    const uid = userId?.toString();
+    const joined = new Set(this.data.userGroups?.[uid] || []);
+    return (this.data.groups || []).map((group) => ({
+      ...group,
+      joined: joined.has(group.id),
+    }));
   }
 
-  getGroupById(groupId) {
-    return this.data.groups.find((g) => g.id === groupId);
+  getGroupById(groupId, userId) {
+    return this.getGroups(userId).find((group) => group.id === groupId);
   }
 
-  createGroup({ name, category, description, isPrivate = false }) {
+  createGroup({ name, category, description, isPrivate = false }, userId) {
+    if (!userId) return null;
     const newGroup = {
-      id: "group_" + Date.now(),
+      id: `group_${require("crypto").randomUUID()}`,
+      ownerId: userId.toString(),
       name: name.trim(),
       category: category || "General",
       description: description || "",
@@ -525,45 +572,80 @@ class PersistentStore {
     return newGroup;
   }
 
-  toggleGroup(groupId) {
-    const group = this.getGroupById(groupId);
+  toggleGroup(groupId, userId) {
+    const uid = userId?.toString();
+    if (!uid) return null;
+    const group = this.data.groups.find((item) => item.id === groupId);
     if (!group) return null;
 
-    group.joined = !group.joined;
-    group.memberCount = (group.memberCount || 10) + (group.joined ? 1 : -1);
-    group.members = `${(group.memberCount / 1000).toFixed(1)}K members`;
+    if (!this.data.userGroups) this.data.userGroups = {};
+    if (!Array.isArray(this.data.userGroups[uid])) this.data.userGroups[uid] = [];
+    const isJoined = this.data.userGroups[uid].includes(groupId);
+    this.data.userGroups[uid] = isJoined
+      ? this.data.userGroups[uid].filter((id) => id !== groupId)
+      : [...this.data.userGroups[uid], groupId];
     this.saveData();
-    return group;
+    return { ...group, joined: !isJoined };
   }
 
   // Sidebar
-  getSidebarData() {
+  getSidebarData(userId) {
+    const uid = userId?.toString();
+    const following = new Set(this.data.userFollowing?.[uid] || []);
     return {
-      people: this.data.people,
+      people: this.data.people.map((person) => ({
+        ...person,
+        isFollowing: following.has(person.username || person.id),
+      })),
       trending: this.getTrending(),
-      groups: this.data.groups,
-      currentUser: this.currentUser,
+      groups: this.getGroups(uid),
+      currentUser: this.findUser(uid),
     };
   }
 
-  toggleFollow(personId) {
-    const person = this.data.people.find((p) => p.id === personId);
-    if (!person) return null;
-
-    person.isFollowing = !person.isFollowing;
-    const handle = person.username || person.id;
-
-    if (person.isFollowing) {
-      if (!this.data.following.includes(handle)) {
-        this.data.following.push(handle);
+  toggleFollow(personId, userId) {
+    const uid = userId?.toString();
+    if (!uid) return null;
+    let person = (this.data.people || []).find((p) => p.id === personId || p.username === personId);
+    if (!person) {
+      const u = this.findUser(personId);
+      if (u) {
+        person = {
+          id: (u._id || u.id).toString(),
+          name: u.fullName || u.name || u.username,
+          username: u.username,
+          avatar: u.avatar || "/default-avatar.svg",
+        };
+      } else {
+        person = {
+          id: personId,
+          name: personId,
+          username: personId,
+          avatar: "/default-avatar.svg",
+        };
       }
-    } else {
-      this.data.following = this.data.following.filter((id) => id !== handle);
     }
 
-    this.data.currentUser.followingCount = this.data.following.length;
+    const handle = person.username || person.id;
+    if (!this.data.userFollowing) this.data.userFollowing = {};
+    if (!Array.isArray(this.data.userFollowing[uid])) this.data.userFollowing[uid] = [];
+    const isFollowing =
+      this.data.userFollowing[uid].includes(handle) ||
+      this.data.userFollowing[uid].includes(person.id);
+    if (!isFollowing) {
+      this.data.userFollowing[uid].push(handle);
+      if (person.id && person.id !== handle) {
+        this.data.userFollowing[uid].push(person.id);
+      }
+    } else {
+      this.data.userFollowing[uid] = this.data.userFollowing[uid].filter(
+        (id) => id !== handle && id !== person.id
+      );
+    }
+    const user = this.findUser(uid);
+    if (user) user.followingCount = this.data.userFollowing[uid].length;
     this.saveData();
-    return person;
+    return { ...person, isFollowing: !isFollowing };
   }
 
   // Update Profile
@@ -574,6 +656,1478 @@ class PersistentStore {
     };
     this.saveData();
     return this.data.currentUser;
+  }
+
+  // Get User Profile with Stats & Status (supports viewerUserId for isolated context)
+  getUserProfile(username = "", viewerUserId = null) {
+    const handle = (username || "").toLowerCase();
+
+    // Check if target is viewer's own profile
+    let isSelf = false;
+    let targetUser = null;
+
+    if (viewerUserId) {
+      const viewer = this.findUser(viewerUserId);
+      if (viewer && (handle === "me" || handle === (viewer.username || "").toLowerCase() || handle === viewer._id || handle === viewer.id)) {
+        isSelf = true;
+        targetUser = viewer;
+      }
+    }
+
+    if (!targetUser) {
+      if (handle === "me" && this.currentUser) {
+        isSelf = true;
+        targetUser = this.currentUser;
+      } else {
+        targetUser = this.findUser(handle);
+      }
+    }
+
+    // If viewing an actual registered user account:
+    if (targetUser) {
+      const posts = this.getUserPosts(targetUser.username, "posts", viewerUserId);
+      const followingList = this.data.userFollowing?.[targetUser._id || targetUser.id] || [];
+      const isFollowing = viewerUserId
+        ? (this.data.userFollowing?.[viewerUserId] || []).includes(targetUser.username || targetUser._id)
+        : false;
+
+      return {
+        _id: targetUser._id || targetUser.id,
+        id: targetUser._id || targetUser.id,
+        name: targetUser.name || targetUser.username,
+        username: targetUser.username,
+        avatar: targetUser.avatar || "/default-avatar.svg",
+        fallbackAvatar: targetUser.fallbackAvatar || targetUser.avatar || "/default-avatar.svg",
+        isVerified: !!targetUser.isVerified,
+        roleTag: targetUser.roleTag || "",
+        pronouns: targetUser.pronouns || "",
+        bio: targetUser.bio || "",
+        website: targetUser.website || "",
+        location: targetUser.location || "",
+        joined: targetUser.joined || "Joined Staple",
+        cover: targetUser.cover || "",
+        postsCount: posts.length,
+        followersCount: targetUser.followersCount || 0,
+        followingCount: followingList.length,
+        isSelf: isSelf || (viewerUserId && (viewerUserId === targetUser._id || viewerUserId === targetUser.id)),
+        isFollowing,
+      };
+    }
+
+    // Fallback: check creators/people in sidebar
+    const person =
+      (this.data.people || []).find(
+        (p) => (p.username || "").toLowerCase() === handle || p.id === handle
+      ) ||
+      (this.data.creators || []).find(
+        (c) => (c.username || "").toLowerCase() === handle || c.id === handle
+      );
+
+    if (person) {
+      const isFollowing = (this.data.userFollowing?.[viewerUserId] || []).includes(person.username || person.id);
+      return {
+        _id: person.id || `user_${person.username}`,
+        name: person.name,
+        username: person.username,
+        avatar: person.avatar,
+        fallbackAvatar: person.fallback,
+        isVerified: !!person.isVerified,
+        roleTag: person.roleTag || "Creator",
+        pronouns: person.pronouns || "they/them",
+        bio: person.bio || person.subtitle || "Visual designer & creative archivist on Staple.",
+        website: person.website || "https://staple.social",
+        location: person.location || "San Francisco, CA",
+        joined: person.joined || "Joined Staple 2024",
+        cover: person.cover || "/profile/clean_cover.png",
+        postsCount: person.postsCount || 12,
+        followersCount: person.followersCount || "4.8k",
+        followingCount: person.followingCount || 230,
+        isSelf: false,
+        isFollowing,
+      };
+    }
+
+    return null;
+  }
+
+  // Get User Posts by Tab (posts, reels, saved, tagged) strictly isolated
+  getUserPosts(username = "", tab = "posts", viewerUserId = null) {
+    const handle = (username || "").toLowerCase();
+    if (handle === "me" && !viewerUserId) return [];
+    const targetUser = handle === "me" ? this.findUser(viewerUserId) : this.findUser(handle);
+    if (!targetUser) return [];
+    const targetId = targetUser._id || targetUser.id;
+    const targetUsername = targetUser.username;
+    const isOwner =
+      Boolean(viewerUserId) && targetId.toString() === viewerUserId.toString();
+    const followsTarget =
+      Boolean(viewerUserId) &&
+      (this.data.userFollowing?.[viewerUserId] || []).some(
+        (identifier) =>
+          identifier === targetUsername || identifier === targetId.toString()
+      );
+
+    if (targetUser?.isPrivate && !isOwner && !followsTarget) return [];
+    if (tab === "saved" && !isOwner) return [];
+
+    if (tab === "posts") {
+      return (this.data.posts || [])
+        .filter((p) => {
+          const authId = p.authorId?._id || p.authorId?.id;
+          const authUname = (p.authorId?.username || "").toLowerCase();
+          return authId === targetId || authUname === targetUsername.toLowerCase();
+        })
+        .map((p) => ({
+          id: p._id,
+          image: p.media?.[0]?.url || "",
+          caption: p.content,
+          likes: (p.likesCount || 0).toLocaleString(),
+          likesCount: p.likesCount || 0,
+          comments: (p.commentsCount || (p.comments ? p.comments.length : 0)).toLocaleString(),
+          commentsCount: p.commentsCount || (p.comments ? p.comments.length : 0),
+          hasCarousel: p.media && p.media.length > 1,
+          type: p.media && p.media.some((m) => m.type === "video" || m.url.endsWith(".mp4")) ? "reel" : "photo",
+          time: p.time || "",
+          location: p.location || "",
+          authorId: p.authorId,
+          views: p.views,
+        }));
+    }
+
+    if (tab === "reels") {
+      const userPosts = this.getUserPosts(username, "posts", viewerUserId);
+      return userPosts.filter((p) => p.type === "reel");
+    }
+
+    if (tab === "saved") {
+      const savedIds = new Set(this.data.userBookmarks?.[targetId] || []);
+      if (savedIds.size === 0) return [];
+      const allExplores = [...(this.data.explorePosts || []), ...(this.data.posts || [])];
+      return allExplores
+        .filter((p) => savedIds.has(p._id))
+        .map((e) => ({
+          id: e._id,
+          image: e.media?.[0]?.url || "",
+          caption: e.caption || e.content,
+          likes: (e.likesCount || 0).toLocaleString(),
+          comments: (e.commentsCount || 0).toLocaleString(),
+          type: e.isReel ? "reel" : "photo",
+          location: e.location,
+        }));
+    }
+
+    if (tab === "tagged") {
+      return [];
+    }
+
+    return [];
+  }
+
+  // Get Highlights
+  getHighlights(username = "", viewerUserId = null) {
+    const handle = (username || "").toLowerCase();
+    if (handle === "me" && !viewerUserId) return [];
+    const targetUser = handle === "me" ? this.findUser(viewerUserId) : this.findUser(handle);
+    const targetId = targetUser?._id?.toString() || targetUser?.id?.toString() || handle;
+    return this.data.userHighlights?.[targetId] || [];
+  }
+
+  // Add Highlight
+  addHighlight({ title, image, stories = [] }, userId) {
+    const uid = userId?.toString();
+    if (!uid) return null;
+    if (!this.data.userHighlights) this.data.userHighlights = {};
+    if (!Array.isArray(this.data.userHighlights[uid])) this.data.userHighlights[uid] = [];
+
+    const newHl = {
+      id: `hl_${require("crypto").randomUUID()}`,
+      ownerId: uid,
+      title: title || "Memories",
+      image: image || "/profile/hl_film.png",
+      storiesCount: stories.length || 1,
+      stories: stories.length > 0 ? stories : [{ id: "s1", url: image || "/profile/hl_film.png", time: "Just now" }],
+      createdAt: new Date().toISOString(),
+    };
+
+    this.data.userHighlights[uid].push(newHl);
+    this.saveData();
+    return newHl;
+  }
+
+  // Get Followers
+  getFollowers() {
+    return [];
+  }
+
+  // Get Following
+  getFollowing(username = "", viewerUserId = null) {
+    const targetUser = this.findUser(username) || (viewerUserId ? this.findUser(viewerUserId) : null);
+    const uid = targetUser?._id?.toString() || targetUser?.id?.toString();
+    const following = new Set(this.data.userFollowing?.[uid] || []);
+    return (this.data.people || []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      username: p.username,
+      avatar: p.avatar,
+      isFollowing: following.has(p.username || p.id),
+      subtitle: p.subtitle || "Visual creator",
+    }));
+  }
+
+  // Toggle Follow by Username
+  toggleFollowUser(username, userId) {
+    const uid = userId?.toString();
+    if (!uid) return null;
+    const handle = (username || "").toLowerCase();
+    if (!this.data.userFollowing) this.data.userFollowing = {};
+    if (!Array.isArray(this.data.userFollowing[uid])) this.data.userFollowing[uid] = [];
+    const isCurrentlyFollowing = this.data.userFollowing[uid].includes(handle);
+
+    if (isCurrentlyFollowing) {
+      this.data.userFollowing[uid] = this.data.userFollowing[uid].filter((h) => h !== handle);
+    } else {
+      this.data.userFollowing[uid].push(handle);
+    }
+
+    const user = this.findUser(uid);
+    if (user) user.followingCount = this.data.userFollowing[uid].length;
+    this.saveData();
+
+    return {
+      username,
+      isFollowing: !isCurrentlyFollowing,
+      followingCount: this.data.userFollowing[uid].length,
+    };
+  }
+
+  // ================= EXPLORE METHODS =================
+
+  getExploreFeed({ userId = null, category = "for-you", view = "all", q = "", sort = "trending" } = {}) {
+    // 1. Gather explore posts
+    let items = [...(this.data.explorePosts || [])];
+
+    // 2. Also dynamically include published user posts that have media
+    const userMediaPosts = (this.data.posts || [])
+      .filter((p) => p.media && p.media.length > 0 && (!p.visibility || p.visibility === "public"))
+      .map((p) => ({
+        _id: p._id,
+        title: p.content.slice(0, 45) || "User Visual",
+        caption: p.content,
+        category: p.category || (p.tags && p.tags[0] ? p.tags[0].replace("#", "") : "photography"),
+        isReel: p.media.some((m) => m.type === "video" || m.url.endsWith(".mp4")),
+        authorId: p.authorId,
+        time: p.time || "",
+        location: p.location || "San Francisco, CA",
+        media: p.media,
+        tags: p.tags || [],
+        likesCount: p.likesCount || 0,
+        isLiked: false,
+        isSaved: false,
+        commentsCount: p.commentsCount || 0,
+        comments: p.comments || [],
+        views: `${Math.max(1, (p.likesCount || 0) * 8 + 12)}K`,
+        gridSpan: "col-span-1 aspect-square",
+        createdAt: p.createdAt || new Date().toISOString(),
+      }));
+
+    // Merge: unique by _id
+    const existingIds = new Set(items.map((i) => i._id));
+    for (const ump of userMediaPosts) {
+      if (!existingIds.has(ump._id)) {
+        items.push(ump);
+      }
+    }
+
+    // 3. Category Filter
+    if (category && category !== "for-you") {
+      const catLower = category.toLowerCase();
+      items = items.filter((item) => {
+        if (item.category && item.category.toLowerCase().includes(catLower)) return true;
+        if (item.tags && item.tags.some((t) => t.toLowerCase().includes(catLower))) return true;
+        if (item.pillTags && item.pillTags.some((pt) => pt.toLowerCase().includes(catLower))) return true;
+        return false;
+      });
+    }
+
+    // 4. View Filter: All | Photos | Reels
+    if (view === "photos") {
+      items = items.filter((item) => !item.isReel);
+    } else if (view === "reels") {
+      items = items.filter((item) => item.isReel);
+    }
+
+    // 5. Search Query Filter
+    if (q && q.trim()) {
+      const query = q.trim().toLowerCase();
+      items = items.filter((item) => {
+        return (
+          (item.title && item.title.toLowerCase().includes(query)) ||
+          (item.caption && item.caption.toLowerCase().includes(query)) ||
+          (item.location && item.location.toLowerCase().includes(query)) ||
+          (item.authorId?.name && item.authorId.name.toLowerCase().includes(query)) ||
+          (item.authorId?.username && item.authorId.username.toLowerCase().includes(query)) ||
+          (item.tags && item.tags.some((t) => t.toLowerCase().includes(query))) ||
+          (item.pillTags && item.pillTags.some((pt) => pt.toLowerCase().includes(query)))
+        );
+      });
+    }
+
+    // 6. Sorting: trending | popular | recent
+    if (sort === "popular") {
+      items.sort((a, b) => (b.likesCount || 0) - (a.likesCount || 0));
+    } else if (sort === "recent") {
+      items.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    } else {
+      // trending: score based on likes and comments
+      items.sort((a, b) => {
+        const scoreA = (a.likesCount || 0) * 1.5 + (a.commentsCount || 0) * 3;
+        const scoreB = (b.likesCount || 0) * 1.5 + (b.commentsCount || 0) * 3;
+        return scoreB - scoreA;
+      });
+    }
+
+    // Per-user isolated bookmark and like status
+    const targetUserId = userId?.toString();
+    const bookmarkedSet = new Set(targetUserId ? (this.data.userBookmarks?.[targetUserId] || []) : []);
+    const likedSet = new Set(targetUserId ? (this.data.userLikes?.[targetUserId] || []) : []);
+
+    items = items.map((it) => ({
+      ...it,
+      isSaved: bookmarkedSet.has(it._id),
+      isLiked: likedSet.has(it._id),
+    }));
+
+    return items;
+  }
+
+  getExplorePostById(postId, userId = null) {
+    const fromExplore = (this.data.explorePosts || []).find((p) => p._id === postId);
+    if (fromExplore) {
+      const uid = userId?.toString();
+      return {
+        ...fromExplore,
+        isLiked: Boolean(uid && this.data.userLikes?.[uid]?.includes(postId)),
+        isSaved: Boolean(uid && this.data.userBookmarks?.[uid]?.includes(postId)),
+      };
+    }
+    const post = this.getPostById(postId);
+    if (!post || (post.visibility && post.visibility !== "public" && !this.ownsPost(post, userId))) return null;
+    const uid = userId?.toString();
+    return {
+      ...post,
+      isLiked: Boolean(uid && this.data.userLikes?.[uid]?.includes(postId)),
+      isSaved: Boolean(uid && this.data.userBookmarks?.[uid]?.includes(postId)),
+    };
+  }
+
+  toggleExploreLike(postId, userId = null) {
+    let post = (this.data.explorePosts || []).find((p) => p._id === postId);
+    if (!post) {
+      post = this.getPostById(postId);
+    }
+    if (!post || !userId) return null;
+
+    const uid = userId.toString();
+    if (!this.data.userLikes) this.data.userLikes = {};
+    if (!Array.isArray(this.data.userLikes[uid])) {
+      this.data.userLikes[uid] = [];
+    }
+
+    const isCurrentlyLiked = this.data.userLikes[uid].includes(postId);
+    if (isCurrentlyLiked) {
+      this.data.userLikes[uid] = this.data.userLikes[uid].filter((id) => id !== postId);
+      post.likesCount = Math.max(0, (post.likesCount || 0) - 1);
+    } else {
+      this.data.userLikes[uid].push(postId);
+      post.likesCount = (post.likesCount || 0) + 1;
+    }
+    this.saveData();
+    return { isLiked: !isCurrentlyLiked, likesCount: post.likesCount };
+  }
+
+  toggleExploreBookmark(postId, userId = null) {
+    let post = (this.data.explorePosts || []).find((p) => p._id === postId);
+    if (!post) {
+      post = this.getPostById(postId);
+    }
+    if (!post || !userId) return null;
+
+    const uid = userId.toString();
+    if (!this.data.userBookmarks) this.data.userBookmarks = {};
+    if (!Array.isArray(this.data.userBookmarks[uid])) {
+      this.data.userBookmarks[uid] = [];
+    }
+
+    const isCurrentlySaved = this.data.userBookmarks[uid].includes(postId);
+    if (isCurrentlySaved) {
+      this.data.userBookmarks[uid] = this.data.userBookmarks[uid].filter((id) => id !== postId);
+    } else {
+      this.data.userBookmarks[uid].push(postId);
+    }
+
+    this.saveData();
+    return { isSaved: !isCurrentlySaved };
+  }
+
+  addExploreComment(postId, { user, text }) {
+    let post = (this.data.explorePosts || []).find((p) => p._id === postId);
+    if (!post) {
+      post = this.getPostById(postId);
+    }
+    if (!post || !user?._id && !user?.id) return null;
+
+    if (!Array.isArray(post.comments)) {
+      post.comments = [];
+    }
+
+    const authorObj = {
+      userId: (user._id || user.id).toString(),
+      name: user.name || user.fullName || user.username,
+      username: user.username,
+      avatar: user.avatar || "/default-avatar.svg",
+    };
+
+    const newComment = {
+      _id: "comm_" + Date.now(),
+      author: authorObj,
+      content: text.trim(),
+      createdAt: "Just now",
+      replies: [],
+    };
+
+    post.comments.push(newComment);
+    post.commentsCount = post.comments.length;
+    this.saveData();
+
+    return {
+      comment: newComment,
+      commentsCount: post.commentsCount,
+      comments: post.comments,
+    };
+  }
+
+  getExploreSidebar(userId) {
+    const uid = userId?.toString();
+    const followingSet = new Set(this.data.userFollowing?.[uid] || []);
+    const joinedSet = new Set(this.data.userGroups?.[uid] || []);
+
+    const creators = (this.data.creators || []).map((c) => ({
+      ...c,
+      isFollowing: followingSet.has(c.username || c.id),
+    }));
+
+    const communities = (this.data.communities || []).map((comm) => {
+      return {
+        ...comm,
+        joined: joinedSet.has(comm.id),
+      };
+    });
+
+    return {
+      audioTrends: this.data.audioTrends || [],
+      creators,
+      communities,
+    };
+  }
+
+  toggleExploreFollow(creatorId, userId) {
+    const uid = userId?.toString();
+    if (!uid) return null;
+    const creator = (this.data.creators || []).find((c) => c.id === creatorId || c.username === creatorId);
+    if (!creator) return null;
+
+    const handle = creator.username || creator.id;
+    if (!this.data.userFollowing) this.data.userFollowing = {};
+    if (!Array.isArray(this.data.userFollowing[uid])) this.data.userFollowing[uid] = [];
+    const isNowFollowing = !this.data.userFollowing[uid].includes(handle);
+    if (isNowFollowing) {
+      this.data.userFollowing[uid].push(handle);
+      creator.followersCount = (creator.followersCount || 1000) + 1;
+    } else {
+      this.data.userFollowing[uid] = this.data.userFollowing[uid].filter((h) => h !== handle);
+      creator.followersCount = Math.max(0, (creator.followersCount || 1000) - 1);
+    }
+
+    const user = this.findUser(uid);
+    if (user) user.followingCount = this.data.userFollowing[uid].length;
+    this.saveData();
+
+    return {
+      creatorId: creator.id,
+      isFollowing: isNowFollowing,
+      followersCount: creator.followersCount,
+    };
+  }
+
+  toggleExploreJoinCommunity(communityId, userId) {
+    const uid = userId?.toString();
+    if (!uid) return null;
+    let comm = (this.data.communities || []).find((c) => c.id === communityId);
+    if (!comm) return null;
+
+    if (!this.data.userGroups) this.data.userGroups = {};
+    if (!Array.isArray(this.data.userGroups[uid])) this.data.userGroups[uid] = [];
+    const joined = this.data.userGroups[uid].includes(communityId);
+    this.data.userGroups[uid] = joined
+      ? this.data.userGroups[uid].filter((id) => id !== communityId)
+      : [...this.data.userGroups[uid], communityId];
+    comm.memberCount = (comm.memberCount || 10000) + (joined ? -1 : 1);
+    comm.members = `${(comm.memberCount / 1000).toFixed(1)}k members`;
+
+    this.saveData();
+    return {
+      communityId: comm.id,
+      joined: !joined,
+      memberCount: comm.memberCount,
+      members: comm.members,
+    };
+  }
+
+  // --- NOTIFICATIONS METHODS (User-isolated) ---
+  getNotifications(userId, tab = "all") {
+    if (!userId) return { notifications: [], unreadCount: 0, total: 0 };
+    const uid = userId.toString();
+
+    if (!Array.isArray(this.data.notifications)) {
+      this.data.notifications = [];
+    }
+
+    let list = this.data.notifications.filter((n) => n.recipientId === uid);
+
+    if (tab && tab !== "all") {
+      list = list.filter((n) => n.type === tab);
+    }
+
+    const unreadCount = list.filter((n) => !n.isRead).length;
+
+    return {
+      notifications: list,
+      unreadCount,
+      total: list.length,
+    };
+  }
+
+  getNotificationUnreadCount(userId) {
+    if (!userId) return 0;
+    const uid = userId.toString();
+    const list = (this.data.notifications || []).filter((n) => n.recipientId === uid);
+    return list.filter((n) => !n.isRead).length;
+  }
+
+  markAllNotificationsRead(userId) {
+    if (!userId) return { success: true, unreadCount: 0 };
+    const uid = userId.toString();
+    if (Array.isArray(this.data.notifications)) {
+      this.data.notifications.forEach((n) => {
+        if (n.recipientId === uid) {
+          n.isRead = true;
+        }
+      });
+      this.saveData();
+    }
+    return { success: true, unreadCount: 0 };
+  }
+
+  markNotificationRead(id, userId) {
+    if (!userId) return { success: false, item: null, unreadCount: 0 };
+    const uid = userId.toString();
+    if (!Array.isArray(this.data.notifications)) {
+      this.data.notifications = [];
+    }
+    const item = this.data.notifications.find((n) => n.id === id && n.recipientId === uid);
+    if (item) {
+      item.isRead = true;
+      this.saveData();
+    }
+    const unreadCount = this.getNotificationUnreadCount(uid);
+    return { success: true, item, unreadCount };
+  }
+
+  deleteNotification(id, userId) {
+    if (!userId) return { success: true, deleted: false, unreadCount: 0 };
+    const uid = userId.toString();
+    if (!Array.isArray(this.data.notifications)) {
+      this.data.notifications = [];
+    }
+    const prevLen = this.data.notifications.length;
+    this.data.notifications = this.data.notifications.filter(
+      (n) => !(n.id === id && n.recipientId === uid)
+    );
+    this.saveData();
+    const unreadCount = this.getNotificationUnreadCount(uid);
+    return { success: true, deleted: this.data.notifications.length < prevLen, unreadCount };
+  }
+
+  replyToNotificationComment(id, text, userId) {
+    if (!userId) return null;
+    if (!Array.isArray(this.data.notifications)) {
+      this.data.notifications = [];
+    }
+    const item = this.data.notifications.find((n) => n.id === id && n.recipientId === userId.toString());
+    if (!item) return null;
+
+    if (!Array.isArray(item.replies)) {
+      item.replies = [];
+    }
+
+    const reply = {
+      id: `rep_${Date.now()}`,
+      author: this.findUser(userId),
+      text,
+      createdAt: new Date().toISOString(),
+    };
+
+    item.replies.push(reply);
+    this.saveData();
+    return reply;
+  }
+
+  toggleLikeNotificationComment(id, userId) {
+    if (!userId) return null;
+    if (!Array.isArray(this.data.notifications)) {
+      this.data.notifications = [];
+    }
+    const item = this.data.notifications.find((n) => n.id === id && n.recipientId === userId.toString());
+    if (!item) return null;
+
+    item.isLiked = !item.isLiked;
+    this.saveData();
+    return { isLiked: item.isLiked };
+  }
+
+  respondNotificationFriendRequest(id, action, userId) {
+    if (!userId) return null;
+    if (!Array.isArray(this.data.notifications)) {
+      this.data.notifications = [];
+    }
+    const item = this.data.notifications.find((n) => n.id === id && n.recipientId === userId.toString());
+    if (!item) return null;
+
+    item.friendStatus = action === "accept" || action === "confirmed" ? "confirmed" : "deleted";
+    this.saveData();
+    return { friendStatus: item.friendStatus };
+  }
+
+  getNotificationSidebar(userId) {
+    const uid = userId ? userId.toString() : (this.data.currentUser?._id || "default_user");
+    if (!this.data.userNotificationSidebars) this.data.userNotificationSidebars = {};
+    if (!this.data.userNotificationSidebars[uid] || !this.data.userNotificationSidebars[uid].suggestedFriends?.length) {
+      const otherUsers = (this.data.users || [])
+        .filter((u) => (u._id || u.id)?.toString() !== uid)
+        .slice(0, 5)
+        .map((u) => ({
+          id: (u._id || u.id).toString(),
+          name: u.fullName || u.name || u.username,
+          subtitle: `@${u.username}`,
+          avatar: u.avatar || "/default-avatar.svg",
+          status: "idle",
+        }));
+
+      const defaultCuratedSuggestions = [
+        {
+          id: "sug_liam",
+          name: "Liam Sterling",
+          subtitle: "Followed by sarah_lin",
+          avatar: "/notifications/liam.png",
+          status: "idle",
+        },
+        {
+          id: "sug_helene",
+          name: "Hélène Moreau",
+          subtitle: "8 mutual friends",
+          avatar: "/notifications/helene.png",
+          status: "idle",
+        },
+      ];
+
+      const merged = [
+        ...otherUsers,
+        ...defaultCuratedSuggestions.filter((d) => !otherUsers.some((o) => o.id === d.id)),
+      ];
+
+      this.data.userNotificationSidebars[uid] = {
+        friendRequests: this.data.userNotificationSidebars[uid]?.friendRequests?.length
+          ? this.data.userNotificationSidebars[uid].friendRequests
+          : [
+              {
+                id: "req_maya",
+                name: "Maya Davis",
+                subtitle: "12 mutual friends",
+                avatar: "/notifications/maya.png",
+                status: "pending",
+              },
+            ],
+        birthdays: this.data.userNotificationSidebars[uid]?.birthdays?.length
+          ? this.data.userNotificationSidebars[uid].birthdays
+          : [
+              {
+                id: "bday_lucas",
+                name: "Lucas Vance",
+                subtext: "Leave a message on his timeline",
+                avatar: "/notifications/lucas.png",
+                isWished: false,
+              },
+            ],
+        suggestedFriends: merged,
+      };
+      this.saveData();
+    }
+    return this.data.userNotificationSidebars[uid];
+  }
+
+  respondSidebarFriendRequest(id, action, userId) {
+    const sidebar = this.getNotificationSidebar(userId);
+    let req = (sidebar.friendRequests || []).find((r) => r.id === id);
+    if (!req) {
+      req = { id, status: "pending" };
+      sidebar.friendRequests.push(req);
+    }
+
+    req.status =
+      action === "accept" || action === "confirm" || action === "confirmed"
+        ? "confirmed"
+        : "deleted";
+    this.saveData();
+    return { id, status: req.status };
+  }
+
+  toggleWishBirthday(id, userId) {
+    const sidebar = this.getNotificationSidebar(userId);
+    let bday = (sidebar.birthdays || []).find((b) => b.id === id);
+    if (!bday) {
+      bday = { id, isWished: false };
+      sidebar.birthdays.push(bday);
+    }
+
+    bday.isWished = !bday.isWished;
+    this.saveData();
+    return { id, isWished: bday.isWished };
+  }
+
+  toggleSuggestedFriend(id, userId) {
+    const sidebar = this.getNotificationSidebar(userId);
+    let friend = (sidebar.suggestedFriends || []).find((f) => f.id === id);
+    if (!friend) {
+      const user = this.findUser(id);
+      friend = {
+        id,
+        name: user?.name || user?.username || id,
+        subtitle: user ? `@${user.username}` : "",
+        avatar: user?.avatar || "/default-avatar.svg",
+        status: "idle",
+      };
+      sidebar.suggestedFriends.push(friend);
+    }
+
+    friend.status = friend.status === "added" ? "idle" : "added";
+    this.saveData();
+    return { id, status: friend.status };
+  }
+
+  // --- MESSAGES & CONVERSATIONS METHODS (User-isolated) ---
+  getNotes(userId) {
+    const uid = userId?.toString();
+    if (!uid) return [];
+    const user = this.findUser(uid);
+    const userAvatar = user?.avatar || "/default-avatar.svg";
+
+    const myNoteData = this.data.userNotes?.[uid];
+    const myNote = {
+      id: "me",
+      name: "Your note",
+      avatar: userAvatar,
+      note: myNoteData?.note || "",
+      isSelf: true,
+      updatedAt: myNoteData?.updatedAt,
+    };
+
+    return [myNote];
+  }
+
+  updateUserNote(userIdOrText, noteText = null) {
+    if (noteText === null || !userIdOrText) return [];
+    const uid = userIdOrText.toString();
+    const text = noteText;
+
+    if (!this.data.userNotes) this.data.userNotes = {};
+    this.data.userNotes[uid] = {
+      note: (text || "").trim(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.saveData();
+    return this.getNotes(uid);
+  }
+
+  deleteUserNote(userId = null) {
+    const uid = userId?.toString();
+    if (!uid) return [];
+    if (!this.data.userNotes) this.data.userNotes = {};
+    delete this.data.userNotes[uid];
+    this.saveData();
+    return this.getNotes(uid);
+  }
+
+  getConversations(userId, searchQuery = "", tab = "all") {
+    if (!userId) return [];
+    const uid = userId.toString();
+    const query = searchQuery;
+    const selectedTab = tab;
+    let list = (this.data.conversations || [])
+      .filter((conversation) => this.ownsConversation(conversation, uid))
+      .map((conversation) => ({
+        ...conversation,
+        unread: conversation.unreadByUser?.[uid] ?? conversation.unread ?? 0,
+        isMuted: conversation.mutedFor?.includes(uid) || false,
+        isBlocked: conversation.blockedFor?.includes(uid) || false,
+      }));
+
+    if (query && query.trim()) {
+      const q = query.toLowerCase().trim();
+      list = list.filter(
+        (c) =>
+          c.name?.toLowerCase().includes(q) ||
+          c.username?.toLowerCase().includes(q) ||
+          c.lastMessage?.toLowerCase().includes(q)
+      );
+    }
+
+    if (selectedTab === "unread") {
+      list = list.filter((c) => c.unread > 0);
+    }
+
+    return list;
+  }
+
+  ownsConversation(conversation, userId) {
+    return (
+      Boolean(userId) &&
+      Array.isArray(conversation?.participants) &&
+      conversation.participants.includes(userId) &&
+      !conversation.deletedFor?.includes(userId)
+    );
+  }
+
+  getConversationById(id, userId) {
+    if (!userId) return null;
+    const uid = userId.toString();
+    const conversation = (this.data.conversations || []).find(
+      (item) => item.id === id && this.ownsConversation(item, uid)
+    );
+    if (!conversation) return null;
+    return {
+      ...conversation,
+      unread: conversation.unreadByUser?.[uid] ?? conversation.unread ?? 0,
+      isMuted: conversation.mutedFor?.includes(uid) || false,
+      isBlocked: conversation.blockedFor?.includes(uid) || false,
+    };
+  }
+
+  sendMessage(chatId, { text, type = "text", mediaUrl = null, replyTo = null, forwarded = false, senderId = null }) {
+    if (!Array.isArray(this.data.conversations)) {
+      this.data.conversations = [];
+    }
+
+    const currentUid = senderId?.toString();
+    let conv = (this.data.conversations || []).find(
+      (conversation) => conversation.id === chatId && this.ownsConversation(conversation, currentUid)
+    );
+    if (!conv || !currentUid) return null;
+    const newMsg = {
+      id: `msg_${Date.now()}`,
+      sender: "me",
+      senderId: currentUid,
+      time: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      type,
+      text: text || "",
+      mediaUrl: mediaUrl || undefined,
+      replyTo: replyTo || undefined,
+      forwarded: !!forwarded,
+      reactions: [],
+      read: true,
+      isLiked: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (!Array.isArray(conv.messages)) {
+      conv.messages = [];
+    }
+
+    conv.messages.push(newMsg);
+    conv.lastMessage = text || (type === "image" ? "Sent an attachment" : "");
+    conv.time = "Just now";
+
+    this.saveData();
+    return { conversation: conv, message: newMsg };
+  }
+
+  reactToMessage(chatId, messageId, emoji, userId) {
+    const uid = userId?.toString();
+    const conv = (this.data.conversations || []).find(
+      (conversation) => conversation.id === chatId && this.ownsConversation(conversation, uid)
+    );
+    if (!conv || !Array.isArray(conv.messages)) return null;
+
+    const msg = conv.messages.find((m) => m.id === messageId);
+    if (!msg) return null;
+
+    if (!Array.isArray(msg.reactions)) {
+      msg.reactions = [];
+    }
+
+    const existingIdx = msg.reactions.findIndex((r) => r.userId === uid && r.emoji === emoji);
+    if (existingIdx !== -1) {
+      msg.reactions.splice(existingIdx, 1);
+    } else {
+      msg.reactions = msg.reactions.filter((r) => r.userId !== uid);
+      msg.reactions.push({ emoji, userId: uid, user: this.findUser(uid)?.username || uid, time: "Just now" });
+    }
+
+    this.saveData();
+    return { chatId, messageId, reactions: msg.reactions };
+  }
+
+  forwardMessage(sourceChatId, messageId, targetChatIds = [], userId) {
+    const uid = userId?.toString();
+    const sourceConv = (this.data.conversations || []).find(
+      (conversation) => conversation.id === sourceChatId && this.ownsConversation(conversation, uid)
+    );
+    if (!sourceConv || !Array.isArray(sourceConv.messages)) return null;
+
+    const originalMsg = sourceConv.messages.find((m) => m.id === messageId);
+    if (!originalMsg) return null;
+
+    const forwardedResults = [];
+
+    targetChatIds.forEach((targetId) => {
+      let targetConv = (this.data.conversations || []).find(
+        (conversation) => conversation.id === targetId && this.ownsConversation(conversation, uid)
+      );
+      if (targetConv && uid) {
+        const copyMsg = {
+          id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          sender: "me",
+          senderId: uid,
+          time: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          type: originalMsg.type || "text",
+          text: originalMsg.text || "",
+          mediaUrl: originalMsg.mediaUrl || undefined,
+          forwarded: true,
+          reactions: [],
+          read: true,
+          isLiked: false,
+          createdAt: new Date().toISOString(),
+        };
+
+        if (!Array.isArray(targetConv.messages)) {
+          targetConv.messages = [];
+        }
+
+        targetConv.messages.push(copyMsg);
+        targetConv.lastMessage = copyMsg.text || "Forwarded message";
+        targetConv.time = "Just now";
+
+        forwardedResults.push({ chatId: targetId, message: copyMsg, conversation: targetConv });
+      }
+    });
+
+    this.saveData();
+    return forwardedResults;
+  }
+
+  unsendMessage(chatId, messageId, userId) {
+    const uid = userId?.toString();
+    const conv = (this.data.conversations || []).find(
+      (conversation) => conversation.id === chatId && this.ownsConversation(conversation, uid)
+    );
+    if (!conv || !Array.isArray(conv.messages)) return null;
+
+    const initialLen = conv.messages.length;
+    const message = conv.messages.find((item) => item.id === messageId);
+    if (message?.senderId !== uid) return null;
+    conv.messages = conv.messages.filter((m) => m.id !== messageId);
+
+    if (conv.messages.length < initialLen) {
+      const last = conv.messages[conv.messages.length - 1];
+      conv.lastMessage = last ? last.text || "Sent an attachment" : "No messages yet";
+      this.saveData();
+      return { success: true, chatId, messageId, lastMessage: conv.lastMessage };
+    }
+
+    return null;
+  }
+
+  toggleLikeMessage(chatId, messageId, userId) {
+    const uid = userId?.toString();
+    const conv = (this.data.conversations || []).find(
+      (conversation) => conversation.id === chatId && this.ownsConversation(conversation, uid)
+    );
+    if (!conv || !Array.isArray(conv.messages)) return null;
+
+    const msg = conv.messages.find((m) => m.id === messageId);
+    if (!msg) return null;
+
+    if (!Array.isArray(msg.likedBy)) msg.likedBy = [];
+    msg.likedBy = msg.likedBy.includes(uid)
+      ? msg.likedBy.filter((id) => id !== uid)
+      : [...msg.likedBy, uid];
+    this.saveData();
+    return { chatId, messageId, isLiked: msg.likedBy.includes(uid) };
+  }
+
+  deleteConversation(chatId, userId) {
+    const uid = userId?.toString();
+    const conversation = (this.data.conversations || []).find(
+      (item) => item.id === chatId && this.ownsConversation(item, uid)
+    );
+    if (!conversation) return { success: false };
+    if (!Array.isArray(conversation.deletedFor)) conversation.deletedFor = [];
+    conversation.deletedFor.push(uid);
+    this.saveData();
+    return { success: true };
+  }
+
+  toggleMuteConversation(chatId, userId) {
+    const uid = userId?.toString();
+    const conv = (this.data.conversations || []).find(
+      (item) => item.id === chatId && this.ownsConversation(item, uid)
+    );
+    if (!conv || !uid) return null;
+    if (!Array.isArray(conv.mutedFor)) conv.mutedFor = [];
+    conv.mutedFor = conv.mutedFor.includes(uid)
+      ? conv.mutedFor.filter((id) => id !== uid)
+      : [...conv.mutedFor, uid];
+    this.saveData();
+    return { id: chatId, isMuted: conv.mutedFor.includes(uid) };
+  }
+
+  toggleBlockConversation(chatId, userId) {
+    const uid = userId?.toString();
+    const conv = (this.data.conversations || []).find(
+      (item) => item.id === chatId && this.ownsConversation(item, uid)
+    );
+    if (!conv || !uid) return null;
+    if (!Array.isArray(conv.blockedFor)) conv.blockedFor = [];
+    conv.blockedFor = conv.blockedFor.includes(uid)
+      ? conv.blockedFor.filter((id) => id !== uid)
+      : [...conv.blockedFor, uid];
+    this.saveData();
+    return { id: chatId, isBlocked: conv.blockedFor.includes(uid) };
+  }
+
+  createConversation({ userId, name, username, avatar, currentUserId = null }) {
+    if (!Array.isArray(this.data.conversations)) {
+      this.data.conversations = [];
+    }
+
+    const initiatorId = currentUserId?.toString();
+    const recipientId = userId?.toString();
+    if (!initiatorId || !recipientId || initiatorId === recipientId) return null;
+    const participants = [initiatorId, recipientId];
+
+    let existing = this.data.conversations.find(
+      (c) =>
+        Array.isArray(c.participants) &&
+        c.participants.includes(initiatorId) &&
+        c.participants.includes(recipientId) &&
+        !c.deletedFor?.includes(initiatorId)
+    );
+    if (existing) return existing;
+
+    const newConv = {
+      id: `chat_${require("crypto").randomUUID()}`,
+      participants,
+      name: name || "",
+      username: username || "",
+      verified: false,
+      avatar: avatar || "/default-avatar.svg",
+      status: "",
+      online: false,
+      lastMessage: "",
+      time: "",
+      unread: 0,
+      type: "direct",
+      isMuted: false,
+      isBlocked: false,
+      postsCount: 0,
+      followers: "0",
+      following: 0,
+      bio: "",
+      messages: [],
+    };
+
+    this.data.conversations.unshift(newConv);
+    this.saveData();
+    return newConv;
+  }
+
+  createDefaultUserSettings(user) {
+    const cleanUsername = (user?.username || "").toLowerCase().trim();
+    const cleanEmail = (user?.email || "").toLowerCase().trim();
+    const displayName = user?.name || user?.fullName || cleanUsername;
+    const defaultAvatar = user?.avatar || "/default-avatar.svg";
+
+    return {
+      account: {
+        email: cleanEmail,
+        phone: "",
+        birthDate: "",
+        twoFactorAuth: false,
+        registeredKey: "None configured",
+        sessions: [
+          {
+            id: `sess_${Date.now()}`,
+            device: "Browser Session",
+            location: "Local",
+            time: "Active this session",
+            isCurrent: true,
+            type: "laptop",
+          },
+        ],
+      },
+      profile: {
+        displayName,
+        username: cleanUsername,
+        pronouns: user?.pronouns || "",
+        bio: user?.bio || "",
+        website: user?.website || "",
+        location: user?.location || "",
+        roleTag: user?.roleTag || "",
+        showVerifiedBadge: !!user?.isVerified,
+        showFollowerCount: true,
+        showStudioSound: true,
+        avatar: defaultAvatar,
+        cover: user?.cover || "",
+      },
+      privacy: {
+        privateAccount: false,
+        storyReplies: "everyone",
+        activeStatus: true,
+        readReceipts: true,
+        blockedUsers: [],
+        restrictedUsers: [],
+      },
+      notifications: {
+        pushNotifications: true,
+        emailNotifications: true,
+        mentions: true,
+        peerSignals: true,
+        directMessages: true,
+        storyReplies: true,
+        pauseAll: false,
+      },
+      appearance: {
+        theme: "editorial",
+        fontSize: "standard",
+        highContrastBorders: false,
+        reduceAnimations: false,
+      },
+      content: {
+        feedQuality: "lossless",
+        losslessAudio: true,
+        autoplayMedia: true,
+        sensitiveContentFilter: false,
+        mutedWords: [],
+      },
+      closeFriends: [],
+      supportTickets: [],
+    };
+  }
+
+  // --- USER SETTINGS METHODS (Per-User Isolated) ---
+  getUserSettings(userId) {
+    const uid = requireUserId(userId);
+    if (!this.data.userSettings) this.data.userSettings = {};
+
+    if (!this.data.userSettings[uid]) {
+      const user = this.findUser(uid);
+      this.data.userSettings[uid] = this.createDefaultUserSettings(user || { _id: uid });
+      this.saveData();
+    }
+
+    return this.data.userSettings[uid];
+  }
+
+  getSettings(userId) {
+    return this.getUserSettings(userId);
+  }
+
+  updateUserSettings(userId, updates = {}) {
+    const uid = requireUserId(userId);
+    const currentSettings = this.getUserSettings(uid);
+
+    for (const key of Object.keys(updates || {})) {
+      if (typeof updates[key] === "object" && updates[key] !== null && !Array.isArray(updates[key])) {
+        currentSettings[key] = {
+          ...(currentSettings[key] || {}),
+          ...updates[key],
+        };
+      } else {
+        currentSettings[key] = updates[key];
+      }
+    }
+
+    if (updates.profile) {
+      this.updateProfileSettings(uid, updates.profile);
+    }
+
+    this.saveData();
+    return currentSettings;
+  }
+
+  updateSettings(userId, updates) {
+    return this.updateUserSettings(userId, updates);
+  }
+
+  updateProfileSettings(userId, profile = {}) {
+    const uid = requireUserId(userId);
+    const currentSettings = this.getUserSettings(uid);
+    currentSettings.profile = {
+      ...(currentSettings.profile || {}),
+      ...profile,
+    };
+
+    const user = this.findUser(uid);
+    if (user) {
+      if (profile.displayName) user.name = profile.displayName;
+      if (profile.username) user.username = profile.username;
+      if (profile.bio !== undefined) user.bio = profile.bio;
+      if (profile.location !== undefined) user.location = profile.location;
+      if (profile.website !== undefined) user.website = profile.website;
+      if (profile.avatar) user.avatar = profile.avatar;
+      if (profile.cover) user.cover = profile.cover;
+      if (profile.pronouns !== undefined) user.pronouns = profile.pronouns;
+      if (profile.roleTag !== undefined) user.roleTag = profile.roleTag;
+    }
+
+    this.saveData();
+    return { settings: currentSettings, profile: currentSettings.profile, user };
+  }
+
+  revokeSession(userId, sessionId) {
+    const uid = requireUserId(userId);
+    const currentSettings = this.getUserSettings(uid);
+    if (!currentSettings.account?.sessions) currentSettings.account.sessions = [];
+    currentSettings.account.sessions = currentSettings.account.sessions.filter((s) => s.id !== sessionId);
+    this.saveData();
+    return currentSettings.account.sessions;
+  }
+
+  toggleCloseFriend(userId, friendId) {
+    const uid = requireUserId(userId);
+    const currentSettings = this.getUserSettings(uid);
+    if (!Array.isArray(currentSettings.closeFriends)) currentSettings.closeFriends = [];
+    const friend = currentSettings.closeFriends.find((f) => f.id === friendId);
+    if (friend) {
+      friend.active = !friend.active;
+      this.saveData();
+      return friend;
+    }
+    return null;
+  }
+
+  addMutedWord(userId, word) {
+    const uid = requireUserId(userId);
+    const currentSettings = this.getUserSettings(uid);
+    if (!currentSettings.content) currentSettings.content = {};
+    if (!Array.isArray(currentSettings.content.mutedWords)) currentSettings.content.mutedWords = [];
+    const clean = (word || "").toLowerCase().trim().replace(/^#/, "");
+    if (clean && !currentSettings.content.mutedWords.includes(clean)) {
+      currentSettings.content.mutedWords.push(clean);
+      this.saveData();
+    }
+    return currentSettings.content.mutedWords;
+  }
+
+  removeMutedWord(userId, word) {
+    const uid = requireUserId(userId);
+    const currentSettings = this.getUserSettings(uid);
+    if (!currentSettings.content) currentSettings.content = {};
+    if (!Array.isArray(currentSettings.content.mutedWords)) currentSettings.content.mutedWords = [];
+    const clean = (word || "").toLowerCase().trim().replace(/^#/, "");
+    currentSettings.content.mutedWords = currentSettings.content.mutedWords.filter((x) => x !== clean);
+    this.saveData();
+    return currentSettings.content.mutedWords;
+  }
+
+  unblockUser(userId, targetUserId) {
+    const uid = requireUserId(userId);
+    const currentSettings = this.getUserSettings(uid);
+    if (!currentSettings.privacy) currentSettings.privacy = {};
+    if (!Array.isArray(currentSettings.privacy.blockedUsers)) currentSettings.privacy.blockedUsers = [];
+    currentSettings.privacy.blockedUsers = currentSettings.privacy.blockedUsers.filter(
+      (u) => u.id !== targetUserId && u.username !== targetUserId
+    );
+    this.saveData();
+    return currentSettings.privacy.blockedUsers;
+  }
+
+  submitSupportTicket(userId, data = {}) {
+    const uid = requireUserId(userId);
+    const currentSettings = this.getUserSettings(uid);
+    if (!Array.isArray(currentSettings.supportTickets)) currentSettings.supportTickets = [];
+
+    const user = this.findUser(uid);
+    const ticket = {
+      id: `ticket_${Date.now()}`,
+      subject: data.subject || "Support Inquiry",
+      category: data.category || "general",
+      message: data.message || "",
+      email: data.email || user?.email || "",
+      status: "received",
+      createdAt: new Date().toISOString(),
+    };
+
+    currentSettings.supportTickets.unshift(ticket);
+    this.saveData();
+    return ticket;
+  }
+
+  updateAvatar(userId, avatar) {
+    const uid = requireUserId(userId);
+    const user = this.findUser(uid);
+    const finalAvatar =
+      !avatar || avatar === "reset"
+        ? "/default-avatar.svg"
+        : avatar;
+
+    if (user) {
+      user.avatar = finalAvatar;
+    }
+    const currentSettings = this.getUserSettings(uid);
+    if (currentSettings.profile) {
+      currentSettings.profile.avatar = finalAvatar;
+    }
+
+    this.saveData();
+    return { avatar: finalAvatar, user };
+  }
+
+  revokeAllOtherSessions(userId) {
+    const uid = requireUserId(userId);
+    const currentSettings = this.getUserSettings(uid);
+    if (!currentSettings.account?.sessions) currentSettings.account.sessions = [];
+    currentSettings.account.sessions = currentSettings.account.sessions.filter((s) => s.isCurrent);
+    this.saveData();
+    return currentSettings.account.sessions;
+  }
+
+  addBlockedUser(userId, data = {}) {
+    const uid = requireUserId(userId);
+    const currentSettings = this.getUserSettings(uid);
+    if (!currentSettings.privacy) currentSettings.privacy = {};
+    if (!Array.isArray(currentSettings.privacy.blockedUsers)) currentSettings.privacy.blockedUsers = [];
+
+    const cleanHandle = (data.username || "").replace(/^@/, "").trim();
+    const exists = currentSettings.privacy.blockedUsers.some(
+      (u) => u.username.toLowerCase() === cleanHandle.toLowerCase()
+    );
+
+    if (!exists && cleanHandle) {
+      const newUser = {
+        id: `block_${Date.now()}`,
+        name: data.name || cleanHandle,
+        username: cleanHandle,
+        avatar: data.avatar || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(cleanHandle)}&backgroundColor=1b1c19&textColor=ffffff`,
+        blockedAt: "Just now",
+      };
+      currentSettings.privacy.blockedUsers.unshift(newUser);
+      this.saveData();
+    }
+    return currentSettings.privacy.blockedUsers;
+  }
+
+  addCloseFriend(userId, data = {}) {
+    const uid = requireUserId(userId);
+    const currentSettings = this.getUserSettings(uid);
+    if (!Array.isArray(currentSettings.closeFriends)) currentSettings.closeFriends = [];
+
+    const cleanHandle = (data.handle || data.username || "").replace(/^@/, "").trim();
+    const newFriend = {
+      id: `friend_${Date.now()}`,
+      name: data.name || cleanHandle,
+      handle: cleanHandle,
+      role: data.role || "Creator",
+      avatar: data.avatar || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(cleanHandle)}&backgroundColor=1b1c19&textColor=ffffff`,
+      active: true,
+    };
+    currentSettings.closeFriends.push(newFriend);
+    this.saveData();
+    return newFriend;
+  }
+
+  initializeUser(user) {
+    const userId = user?._id?.toString() || user?.id?.toString();
+    if (!userId || !user.username || !user.email) {
+      throw new Error("A persisted user ID, username, and email are required");
+    }
+
+    if (!Array.isArray(this.data.users)) this.data.users = [];
+    let profile = this.data.users.find((item) => item._id?.toString() === userId);
+    if (!profile) {
+      profile = { _id: userId, id: userId };
+      this.data.users.push(profile);
+    }
+
+    Object.assign(profile, {
+      _id: userId,
+      id: userId,
+      username: user.username,
+      email: user.email,
+      name: user.fullName || user.name || user.username,
+      fullName: user.fullName || user.name || "",
+      avatar: user.avatar || "/default-avatar.svg",
+      fallbackAvatar: user.avatar || "/default-avatar.svg",
+      emailVerified: user.emailVerified === true,
+      isPrivate: user.isPrivate === true,
+      bio: user.bio || "",
+      website: user.website || "",
+      location: user.location || "",
+      pronouns: user.pronouns || "",
+      cover: user.cover || "",
+      followingCount: user.followingCount || 0,
+      followersCount: user.followersCount || 0,
+      postsCount: user.postsCount || 0,
+    });
+
+    const initializeMap = (mapName, value) => {
+      if (!this.data[mapName]) this.data[mapName] = {};
+      if (!Object.prototype.hasOwnProperty.call(this.data[mapName], userId)) {
+        this.data[mapName][userId] = value;
+      }
+    };
+
+    initializeMap("userBookmarks", []);
+    initializeMap("userLikes", []);
+    initializeMap("userFollowing", []);
+    initializeMap("userHighlights", []);
+    initializeMap("userNotes", null);
+    initializeMap("userSettings", this.createDefaultUserSettings(profile));
+    this.saveData();
+    return profile;
+  }
+
+  findUser(identifier) {
+    if (!identifier) return null;
+    const clean = identifier.toString().toLowerCase().trim();
+    if (!Array.isArray(this.data.users)) {
+      this.data.users = [];
+    }
+    const found = this.data.users.find(
+      (u) =>
+        (u._id && u._id.toString().toLowerCase() === clean) ||
+        (u.id && u.id.toString().toLowerCase() === clean) ||
+        (u.email && u.email.toLowerCase() === clean) ||
+        (u.username && u.username.toLowerCase() === clean)
+    );
+    if (found) return found;
+
+    return null;
   }
 }
 

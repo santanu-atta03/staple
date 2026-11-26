@@ -101,13 +101,17 @@ export default function StoryViewerModal({ stories, initialIndex = 0, onClose, o
         <div className="absolute top-7 inset-x-3 z-30 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <img
-              src={activeStory.avatar || "/recreation/avatar_left_elena_hires.png"}
+              src={activeStory.avatar || "/default-avatar.svg"}
               alt={activeStory.name}
               className="h-9 w-9 rounded-full object-cover ring-2 ring-white/60"
             />
             <div className="leading-tight text-white drop-shadow">
               <p className="text-[13px] font-semibold">{activeStory.name}</p>
-              <p className="text-[11px] text-white/80">{activeStory.createdAt ? "Today" : "Just now"}</p>
+              <p className="text-[11px] text-white/80">
+                {activeStory.createdAt
+                  ? new Date(activeStory.createdAt).toLocaleDateString()
+                  : ""}
+              </p>
             </div>
           </div>
 
@@ -132,55 +136,87 @@ export default function StoryViewerModal({ stories, initialIndex = 0, onClose, o
 
         {/* Story Media (Image or Video) */}
         <div className="relative h-full w-full bg-neutral-950 flex items-center justify-center">
-          <img
-            src={activeStory.mediaUrl || "/profile/post_1_kyoto_lanterns.png"}
-            alt="Story content"
-            className="h-full w-full object-cover"
-          />
+          {activeStory.mediaUrl?.endsWith(".mp4") || activeStory.mediaUrl?.includes("video") || activeStory.type === "video" ? (
+            <video
+              src={activeStory.mediaUrl}
+              autoPlay
+              loop
+              playsInline
+              muted
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <img
+              src={activeStory.mediaUrl || "/profile/post_1_kyoto_lanterns.png"}
+              alt="Story content"
+              className="h-full w-full object-cover"
+            />
+          )}
 
           {/* Touch navigation zones */}
           <div
             onClick={handlePrev}
-            className="absolute left-0 top-16 bottom-20 w-1/3 cursor-pointer z-20"
+            className="absolute left-0 top-16 bottom-28 w-1/3 cursor-pointer z-20"
           />
           <div
             onClick={handleNext}
-            className="absolute right-0 top-16 bottom-20 w-1/3 cursor-pointer z-20"
+            className="absolute right-0 top-16 bottom-28 w-1/3 cursor-pointer z-20"
           />
 
           {/* Story Caption */}
           {activeStory.caption && (
-            <div className="absolute bottom-20 inset-x-4 z-30 rounded-xl bg-black/60 p-3 text-center text-[13.5px] font-medium text-white backdrop-blur-md">
+            <div className="absolute bottom-24 inset-x-4 z-30 rounded-xl bg-black/60 p-3 text-center text-[13.5px] font-medium text-white backdrop-blur-md">
               {activeStory.caption}
             </div>
           )}
         </div>
 
-        {/* Story Bottom Reply Bar */}
-        <div className="absolute bottom-3 inset-x-3 z-30 flex items-center gap-2">
-          <form onSubmit={handleSendReply} className="flex flex-1 items-center rounded-full bg-white/20 backdrop-blur-md px-3.5 py-2 ring-1 ring-white/30">
-            <input
-              type="text"
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              placeholder={`Reply to ${activeStory.name}...`}
-              className="w-full bg-transparent text-[13px] text-white placeholder-white/70 outline-none"
-            />
-            {replyText.trim() && (
-              <button type="submit" className="text-white hover:text-white/80">
-                <Send className="h-4 w-4" />
+        {/* Story Quick Reactions & Reply Bar */}
+        <div className="absolute bottom-3 inset-x-3 z-30 space-y-2">
+          {/* Instagram-style Quick Emoji Reactions */}
+          <div className="flex items-center justify-around rounded-full bg-black/40 backdrop-blur-md py-1.5 px-3">
+            {["❤️", "🔥", "😂", "😮", "👏", "🎉"].map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => {
+                  if (onReply) onReply(activeStory.id, emoji);
+                }}
+                className="text-[18px] transition hover:scale-130 active:scale-95"
+              >
+                {emoji}
               </button>
-            )}
-          </form>
+            ))}
+          </div>
 
-          <button
-            onClick={() => setIsLiked(!isLiked)}
-            className={`flex h-10 w-10 items-center justify-center rounded-full backdrop-blur-md transition ${
-              isLiked ? "bg-rose-600 text-white" : "bg-white/20 text-white hover:bg-white/30"
-            }`}
-          >
-            <Heart className={`h-5 w-5 ${isLiked ? "fill-white" : ""}`} />
-          </button>
+          <div className="flex items-center gap-2">
+            <form onSubmit={handleSendReply} className="flex flex-1 items-center rounded-full bg-white/20 backdrop-blur-md px-3.5 py-2 ring-1 ring-white/30">
+              <input
+                type="text"
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder={`Reply to ${activeStory.name}...`}
+                className="w-full bg-transparent text-[13px] text-white placeholder-white/70 outline-none"
+              />
+              {replyText.trim() && (
+                <button type="submit" className="text-white hover:text-white/80">
+                  <Send className="h-4 w-4" />
+                </button>
+              )}
+            </form>
+
+            <button
+              onClick={() => {
+                setIsLiked(!isLiked);
+                if (!isLiked && onReply) onReply(activeStory.id, "❤️");
+              }}
+              className={`flex h-10 w-10 items-center justify-center rounded-full backdrop-blur-md transition ${
+                isLiked ? "bg-rose-600 text-white" : "bg-white/20 text-white hover:bg-white/30"
+              }`}
+            >
+              <Heart className={`h-5 w-5 ${isLiked ? "fill-white" : ""}`} />
+            </button>
+          </div>
         </div>
       </div>
 

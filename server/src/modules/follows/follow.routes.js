@@ -3,6 +3,8 @@ const authMiddleware = require("../../middleware/auth.middleware");
 const rateLimit = require("../../middleware/rateLimit.middleware");
 const followController = require("./follow.controller");
 
+router.use(authMiddleware.optionalAuthenticate);
+
 router.post(
   "/:userId",
   authMiddleware,

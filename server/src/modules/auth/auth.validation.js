@@ -14,7 +14,7 @@ const registerSchema = z.object({
     .max(254),
 
   password: z.string()
-    .min(12)
+    .min(8)
     .max(128),
 
   fullName: z.string()
@@ -26,7 +26,7 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email: z.string()
     .trim()
-    .email()
+    .min(1)
     .max(254),
 
   password: z.string()

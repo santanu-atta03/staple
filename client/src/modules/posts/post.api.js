@@ -11,7 +11,7 @@ export const fetchPostComments = async (postId, page = 1) => {
 };
 
 export const createPostComment = async (postId, content) => {
-  const { data } = await api.post(`/comments/${postId}`, { content });
+  const { data } = await api.post(`/comments/${postId}`, { text: content });
   return data.comment;
 };
 

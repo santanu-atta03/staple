@@ -2,12 +2,20 @@
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 
+const getAccessSecret = () => {
+  const secret = process.env.JWT_ACCESS_SECRET;
+  if (!secret || Buffer.byteLength(secret) < 32) {
+    throw new Error("JWT_ACCESS_SECRET must contain at least 32 bytes");
+  }
+  return secret;
+};
+
 const generateAccessToken = (userId, sessionId) => {
   return jwt.sign(
     {
       sessionId,
     },
-    process.env.JWT_ACCESS_SECRET,
+    getAccessSecret(),
     {
       subject: userId.toString(),
       expiresIn: process.env.ACCESS_TOKEN_EXPIRY || "15m",
@@ -32,4 +40,5 @@ module.exports = {
   generateAccessToken,
   generateRefreshToken,
   hashToken,
+  getAccessSecret,
 };

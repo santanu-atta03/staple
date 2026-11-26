@@ -4,6 +4,7 @@ const rateLimit = require("express-rate-limit");
 
 const controller = require("./auth.controller");
 const validate = require("../../middleware/validate.middleware");
+const authenticate = require("../../middleware/auth.middleware");
 
 const {
   registerSchema,
@@ -14,7 +15,7 @@ const router = express.Router();
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 10,
+  limit: process.env.NODE_ENV === "production" ? 30 : 500,
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: {
@@ -23,11 +24,29 @@ const authLimiter = rateLimit({
   },
 });
 
+router.get(
+  "/me",
+  authenticate,
+  controller.getMe
+);
+
 router.post(
-  "/register",
+  "/register-initiate",
   authLimiter,
   validate(registerSchema),
-  controller.register
+  controller.registerInitiate
+);
+
+router.post(
+  "/verify-otp",
+  authLimiter,
+  controller.verifyOtp
+);
+
+router.post(
+  "/resend-otp",
+  authLimiter,
+  controller.resendOtp
 );
 
 router.post(
@@ -36,6 +55,30 @@ router.post(
   validate(loginSchema),
   controller.login
 );
+
+router.post(
+  "/google",
+  authLimiter,
+  controller.googleLogin
+);
+
+router.post(
+  "/apple",
+  authLimiter,
+  controller.appleLogin
+);
+
+router.get(
+  "/check-username",
+  authLimiter,
+  controller.checkUsername
+);
+
+router.get("/providers", controller.getProviders);
+
+router.post("/forgot-password", authLimiter, controller.forgotPassword);
+router.post("/resend-reset-otp", authLimiter, controller.resendPasswordResetOtp);
+router.post("/reset-password", authLimiter, controller.resetPassword);
 
 router.post(
   "/refresh",

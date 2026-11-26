@@ -3,6 +3,7 @@ const Feed = require("./feed.model");
 const Post = require("../posts/post.model");
 const Like = require("../likes/like.model");
 const Comment = require("../comments/comment.model");
+const { canViewPost } = require("../posts/post.service");
 
 const getUserFeed = async (userId, page = 1, limit = 20) => {
   const start = (page - 1) * limit;
@@ -30,11 +31,15 @@ const getUserFeed = async (userId, page = 1, limit = 20) => {
   if (!postIds.length) return [];
 
   const posts = await Post.find({ _id: { $in: postIds } })
-    .populate("authorId", "username name avatar")
+    .populate("authorId", "username name avatar isPrivate")
     .lean();
 
   const postMap = new Map(posts.map((p) => [p._id.toString(), p]));
-  const orderedPosts = postIds.map((id) => postMap.get(id)).filter(Boolean);
+  const candidates = postIds.map((id) => postMap.get(id)).filter(Boolean);
+  const visibility = await Promise.all(
+    candidates.map((post) => canViewPost(post, userId))
+  );
+  const orderedPosts = candidates.filter((post, index) => visibility[index]);
 
   // Batch-check Redis for like status, like counts, and comment counts
   const pipeline = redis.pipeline();

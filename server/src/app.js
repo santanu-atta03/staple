@@ -17,6 +17,9 @@ const commentRoutes = require("./modules/comments/comment.routes");
 const feedRoutes = require("./modules/feed/feed.routes");
 const notificationRoutes = require("./modules/notifications/notification.routes");
 const uploadRoutes = require("./routes/upload.routes");
+const exploreRoutes = require("./routes/explore.routes");
+const messageRoutes = require("./routes/message.routes");
+const settingsRoutes = require("./routes/settings.routes");
 
 const errorMiddleware = require("./middleware/error.middleware");
 
@@ -25,7 +28,7 @@ const app = express();
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: true,
     credentials: true,
   })
 );
@@ -43,34 +46,27 @@ app.get("/", (req, res) => {
   res.json({
     success: true,
     message: "Staple Social Platform API is running",
-    user: store.currentUser.username,
   });
 });
 
-// Current Authenticated User Fallback (Elena Vance)
-app.get(["/api/v1/auth/me", "/api/auth/me"], (req, res) => {
-  res.json({
-    success: true,
-    user: store.currentUser,
-  });
-});
+// Modular Routes supported on both /api/v1 and /api
+app.use(["/api/v1/health", "/api/health"], healthRoutes);
+app.use(["/api/v1/auth", "/api/auth"], authRoutes);
+app.use(["/api/v1/users", "/api/users"], authMeRoutes);
+app.use(["/api/v1/users", "/api/users"], userRoutes);
+app.use(["/api/v1/posts", "/api/posts"], postRoutes);
+app.use(["/api/v1/follows", "/api/follows"], followRoutes);
+app.use(["/api/v1/likes", "/api/likes"], likeRoutes);
+app.use(["/api/v1/comments", "/api/comments"], commentRoutes);
+app.use(["/api/v1/feed", "/api/feed"], feedRoutes);
+app.use(["/api/v1/notifications", "/api/notifications"], notificationRoutes);
+app.use(["/api/v1/uploads", "/api/uploads"], uploadRoutes);
+app.use(["/api/v1/explore", "/api/explore"], exploreRoutes);
+app.use(["/api/v1/messages", "/api/messages"], messageRoutes);
+app.use(["/api/v1/settings", "/api/settings"], settingsRoutes);
 
-// Primary Home Page APIs (Dynamic feed, posts, likes, comments, polls, audio, stories, sidebar)
-app.use("/api", homeRoutes);
-app.use("/api/v1", homeRoutes);
-
-// Modular Routes
-app.use("/api/v1/health", healthRoutes);
-app.use("/api/v1/auth", authRoutes);
-app.use("/api/v1/users", authMeRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/posts", postRoutes);
-app.use("/api/follows", followRoutes);
-app.use("/api/likes", likeRoutes);
-app.use("/api/comments", commentRoutes);
-app.use("/api/feed", feedRoutes);
-app.use("/api/notifications", notificationRoutes);
-app.use("/api/uploads", uploadRoutes);
+// Mount the root-scoped legacy routes last so they cannot shadow module APIs.
+app.use(["/api/v1", "/api"], homeRoutes);
 
 // Global Error Handler
 app.use(errorMiddleware);

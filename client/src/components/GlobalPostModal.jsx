@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import { useAuth } from "../context/AuthContext";
 import {
   X,
   Image as ImageIcon,
@@ -16,6 +17,7 @@ import {
 import { createNewPost, uploadMediaFiles } from "../modules/Home/home.api";
 
 export default function GlobalPostModal({ isOpen, onClose, onPostCreated }) {
+  const { user } = useAuth();
   const [content, setContent] = useState("");
   const [location, setLocation] = useState("");
   const [tagsInput, setTagsInput] = useState("");
@@ -104,13 +106,19 @@ export default function GlobalPostModal({ isOpen, onClose, onPostCreated }) {
           {/* User info row */}
           <div className="flex items-center gap-3">
             <img
-              src="/recreation/avatar_left_elena_hires.png"
-              alt="Elena Vance"
+              src={
+                user?.avatar ||
+                `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user?.username || user?.name || "user")}`
+              }
+              alt={user?.name || user?.username || "Curator"}
+              onError={(e) => {
+                e.target.src = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user?.username || "user")}`;
+              }}
               className="h-10 w-10 rounded-full object-cover ring-1 ring-black/5"
             />
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[14px] font-bold text-neutral-900">Elena Vance</span>
+                <span className="text-[14px] font-bold text-neutral-900">{user?.name || user?.username || "Curator"}</span>
                 <span className="rounded-full bg-black px-1 text-[9px] text-white">✓</span>
               </div>
               <div className="flex items-center gap-2 text-[12px] text-neutral-500">

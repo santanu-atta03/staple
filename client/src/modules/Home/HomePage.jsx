@@ -38,6 +38,7 @@ import {
   CornerDownRight,
   Share2,
   UploadCloud,
+  ChevronDown,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -66,6 +67,7 @@ import StoryUploadModal from "./StoryUploadModal";
 import GroupDetailsModal from "./GroupDetailsModal";
 import CreateGroupModal from "./CreateGroupModal";
 import EditPostModal from "./EditPostModal";
+import DeletePostModal from "./DeletePostModal";
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -84,18 +86,30 @@ export default function HomePage() {
   const [trending, setTrending] = useState([]);
   const [groups, setGroups] = useState([]);
 
+  // Blue dot beside "Following" text when there is something new (disappears upon clicking)
+  const [hasNewFollowing, setHasNewFollowing] = useState(() => {
+    const saved = localStorage.getItem("staple_has_new_following");
+    return saved === "true";
+  });
+
   // Composer State
+  const [isComposerExpanded, setIsComposerExpanded] = useState(false);
   const [composerText, setComposerText] = useState("");
   const [selectedFeeling, setSelectedFeeling] = useState("");
   const [showFeelingPicker, setShowFeelingPicker] = useState(false);
   const [composerMediaList, setComposerMediaList] = useState([]);
-  const [composerLocation, setComposerLocation] = useState("San Francisco, CA");
+  const [composerLocation, setComposerLocation] = useState("");
   const [showLocationInput, setShowLocationInput] = useState(false);
   const [postVisibility, setPostVisibility] = useState("public");
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [savedDraft, setSavedDraft] = useState(null);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [isSubmittingPost, setIsSubmittingPost] = useState(false);
+
+  // Interactive Animations & Modal States
+  const [flyingHeartPostId, setFlyingHeartPostId] = useState(null);
+  const [bouncingLikePostId, setBouncingLikePostId] = useState(null);
+  const [deletingPost, setDeletingPost] = useState(null);
 
   // Story Modals
   const [viewerStoryIndex, setViewerStoryIndex] = useState(null);
@@ -119,7 +133,6 @@ export default function HomePage() {
 
   // Search input focus / recent searches
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const recentSearches = ["#filmphotography", "#spatialdesign", "Marcus Chen", "Copenhagen", "Tokyo"];
 
   // Toast alert
   const [toastMessage, setToastMessage] = useState(null);
@@ -189,6 +202,8 @@ export default function HomePage() {
       if (e.detail) {
         setPosts((prev) => [e.detail, ...prev]);
         loadSidebarData();
+        setHasNewFollowing(true);
+        localStorage.setItem("staple_has_new_following", "true");
         showToast("New post appeared in feed!");
       }
     };
@@ -250,7 +265,7 @@ export default function HomePage() {
     setComposerText(savedDraft.text || "");
     setComposerMediaList(savedDraft.media || []);
     setSelectedFeeling(savedDraft.feeling || "");
-    setComposerLocation(savedDraft.location || "San Francisco, CA");
+    setComposerLocation(savedDraft.location || "");
     showToast("Draft loaded into composer");
   };
 
@@ -291,21 +306,72 @@ export default function HomePage() {
       setComposerMediaList([]);
       setIsPreviewMode(false);
       setIsSubmittingPost(false);
+      setIsComposerExpanded(false);
     }
   };
 
-  // Handler: Delete Post (Backend & DB)
-  const handleDeletePost = async (postId) => {
-    if (!confirm("Are you sure you want to delete this post?")) return;
+  // Handler: Open Delete Post Modal
+  const handleOpenDeleteModal = (post) => {
+    setDeletingPost(post);
+  };
 
+  // Handler: Confirm Delete Post (Backend & DB)
+  const handleConfirmDeletePost = async (postId) => {
     try {
       await deletePost(postId);
       setPosts((prev) => prev.filter((p) => p._id !== postId));
+      setDeletingPost(null);
       showToast("Post deleted from database");
       loadSidebarData();
     } catch (err) {
       console.error("Failed to delete post:", err);
+      showToast("Failed to delete post");
     }
+  };
+
+  // Handler: Instagram-style Double-Click Like with Flying Heart pulled to Like button
+  const handlePostDoubleClick = async (postId, e) => {
+    // Avoid double clicks on buttons/inputs/links
+    if (e?.target?.closest("button, a, input, textarea, select")) return;
+
+    // Trigger flying heart animation immediately (appears in center)
+    setFlyingHeartPostId(postId);
+
+    const targetPost = posts.find((p) => p._id === postId);
+    if (targetPost && !targetPost.isLiked) {
+      // Slower release: the like count and button bounce trigger exactly as the heart lands into the like button (~520ms)!
+      setTimeout(async () => {
+        setBouncingLikePostId(postId);
+        setTimeout(() => setBouncingLikePostId(null), 450);
+
+        setPosts((prev) =>
+          prev.map((p) =>
+            p._id === postId
+              ? { ...p, isLiked: true, likesCount: (p.likesCount || 0) + 1 }
+              : p
+          )
+        );
+
+        try {
+          const res = await togglePostLike(postId);
+          if (res) {
+            setPosts((prev) =>
+              prev.map((p) =>
+                p._id === postId
+                  ? { ...p, isLiked: res.isLiked, likesCount: res.likesCount }
+                  : p
+              )
+            );
+          }
+        } catch (err) {
+          console.warn("Double click like sync failed:", err);
+        }
+      }, 520);
+    }
+
+    setTimeout(() => {
+      setFlyingHeartPostId((curr) => (curr === postId ? null : curr));
+    }, 900);
   };
 
   // Handler: Toggle Like (Backend & DB)
@@ -547,7 +613,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full lg:h-screen lg:overflow-hidden">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 rounded-full bg-black/90 px-4 py-2 text-[12.5px] font-semibold text-white shadow-xl backdrop-blur animate-fade-in-slide">
@@ -556,9 +622,9 @@ export default function HomePage() {
       )}
 
       {/* Broad 2-Column Grid with generous spacing */}
-      <div className="flex justify-between gap-6 pt-3 pb-16 lg:gap-8 xl:gap-10 lg:pt-4">
-        {/* CENTER FEED COLUMN: Broad and spacious */}
-        <section className="w-full flex-1 max-w-[700px] xl:max-w-[730px] space-y-4 sm:space-y-5">
+      <div className="flex justify-between gap-6 pt-3 pb-16 lg:gap-8 xl:gap-10 lg:pt-3 lg:pb-0 lg:h-screen lg:overflow-hidden">
+        {/* CENTER FEED COLUMN: Broad and spacious - ONLY this scrolls */}
+        <section className="w-full flex-1 max-w-[700px] xl:max-w-[730px] space-y-4 sm:space-y-5 lg:h-screen lg:overflow-y-auto no-scrollbar lg:pb-28">
           {/* TOP TABS & CONTROLS */}
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2">
@@ -575,7 +641,13 @@ export default function HomePage() {
               </button>
               <button
                 type="button"
-                onClick={() => setFeedTab("following")}
+                onClick={() => {
+                  setFeedTab("following");
+                  if (hasNewFollowing) {
+                    setHasNewFollowing(false);
+                    localStorage.setItem("staple_has_new_following", "false");
+                  }
+                }}
                 className={`flex items-center gap-2 rounded-full px-4 py-1.5 text-[14px] font-medium transition-all duration-150 ${
                   feedTab === "following"
                     ? "bg-white text-black shadow-xs ring-1 ring-black/5 font-semibold"
@@ -583,7 +655,9 @@ export default function HomePage() {
                 }`}
               >
                 <span>Following</span>
-                <span className="h-2 w-2 rounded-full bg-[#35675d]" />
+                {hasNewFollowing && (
+                  <span className="h-2 w-2 rounded-full bg-[#1863dc] ring-2 ring-white/80 animate-pulse" />
+                )}
               </button>
             </div>
 
@@ -599,7 +673,7 @@ export default function HomePage() {
               <button
                 type="button"
                 aria-label="Curated mode"
-                onClick={() => showToast("Curated algorithmic ranking refreshed")}
+                onClick={loadFeedData}
                 className="flex h-9 w-9 items-center justify-center rounded-full text-[#71717a] hover:bg-[#edeae3] hover:text-black transition"
               >
                 <Sparkles className="h-4.5 w-4.5 stroke-[1.8]" />
@@ -610,7 +684,7 @@ export default function HomePage() {
           {/* STORIES ROW */}
           <div className="rounded-[22px] border border-[#ece8de]/60 bg-white p-4 sm:p-5 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
             <div className="no-scrollbar flex items-center gap-4 sm:gap-5 overflow-x-auto px-1">
-              {/* Elena's Create Story Slot */}
+              {/* Current user's story slot */}
               <div className="flex shrink-0 flex-col items-center gap-1.5">
                 <div className="relative">
                   <button
@@ -626,10 +700,10 @@ export default function HomePage() {
                     className="flex h-15 w-15 items-center justify-center rounded-full p-[1.5px] transition hover:scale-105"
                   >
                     <img
-                      src="/recreation/avatar_left_elena_hires.png"
+                      src={user?.avatar || "/default-avatar.svg"}
                       alt="Your story"
                       onError={(e) => {
-                        e.target.src = "/recreation/avatar_left_elena.png";
+                        e.currentTarget.src = "/default-avatar.svg";
                       }}
                       className="h-full w-full rounded-full object-cover ring-2 ring-[#dcd8ce]"
                     />
@@ -668,7 +742,7 @@ export default function HomePage() {
                     >
                       <div className="h-full w-full rounded-full bg-white p-[1.5px]">
                         <img
-                          src={story.avatar || "/recreation/avatar_maya.png"}
+                          src={story.avatar || "/default-avatar.svg"}
                           alt={story.name}
                           className="h-full w-full rounded-full object-cover"
                         />
@@ -683,297 +757,356 @@ export default function HomePage() {
           </div>
 
           {/* POST COMPOSER */}
-          <div className="rounded-[22px] border border-[#ece8de]/60 bg-white p-4 sm:p-5 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
-            {/* Draft Banner if exists */}
-            {savedDraft && (
-              <div className="mb-3 flex items-center justify-between rounded-xl bg-[#faf7f0] border border-[#f0ece0] px-3 py-1.5 text-[12px]">
-                <div className="flex items-center gap-1.5 text-neutral-700">
-                  <FileText className="h-3.5 w-3.5 text-neutral-500" />
-                  <span>Unsaved draft from {savedDraft.savedAt}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleRestoreDraft}
-                    className="font-semibold text-[#1863dc] hover:underline"
-                  >
-                    Restore
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleClearDraft}
-                    className="text-neutral-400 hover:text-rose-600"
-                  >
-                    Discard
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <form onSubmit={handleCreatePost}>
-              <div className="flex items-start gap-3">
+          <div className="rounded-[24px] border border-[#ece8de]/70 bg-white p-3.5 sm:p-4.5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200">
+            {!isComposerExpanded ? (
+              /* Collapsed View: Profile Avatar + Input Box ONLY */
+              <div
+                data-post-composer-pill
+                onClick={() => {
+                  setIsComposerExpanded(true);
+                  setTimeout(() => {
+                    composerInputRef.current?.focus();
+                  }, 80);
+                }}
+                className="flex items-center gap-3 cursor-pointer group select-none"
+              >
                 <img
-                  src="/recreation/avatar_left_elena_hires.png"
-                  alt="Elena Vance"
+                  src={
+                    user?.avatar ||
+                    `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user?.username || "user")}`
+                  }
+                  alt={user?.name || user?.username || "Curator"}
                   onError={(e) => {
-                    e.target.src = "/recreation/avatar_left_elena.png";
+                    e.target.src = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user?.username || "user")}`;
                   }}
-                  className="h-9 w-9 rounded-full object-cover ring-1 ring-black/5 mt-1"
+                  className="h-10 w-10 rounded-full object-cover ring-1 ring-black/5 shrink-0 transition-transform group-hover:scale-105"
                 />
 
-                <div className="flex-1 space-y-2">
-                  {/* Visibility & Location Tags Header */}
-                  <div className="flex flex-wrap items-center gap-2 text-[11.5px]">
-                    <div className="flex items-center gap-1 rounded-full bg-[#f2efe9] px-2.5 py-0.5 text-neutral-700">
-                      {postVisibility === "public" ? (
-                        <Globe className="h-3 w-3 text-neutral-500" />
-                      ) : postVisibility === "close_friends" ? (
-                        <Users className="h-3 w-3 text-neutral-500" />
-                      ) : (
-                        <Lock className="h-3 w-3 text-neutral-500" />
-                      )}
-                      <select
-                        value={postVisibility}
-                        onChange={(e) => setPostVisibility(e.target.value)}
-                        className="bg-transparent text-[11.5px] font-medium outline-none cursor-pointer"
-                      >
-                        <option value="public">Public</option>
-                        <option value="close_friends">Close Friends</option>
-                        <option value="private">Only Me</option>
-                      </select>
-                    </div>
-
-                    {showLocationInput ? (
-                      <div className="flex items-center gap-1 rounded-full bg-[#f2efe9] px-2.5 py-0.5">
-                        <MapPin className="h-3 w-3 text-neutral-500" />
-                        <input
-                          type="text"
-                          value={composerLocation}
-                          onChange={(e) => setComposerLocation(e.target.value)}
-                          className="bg-transparent text-[11.5px] outline-none w-32"
-                          placeholder="Location..."
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowLocationInput(false)}
-                          className="text-neutral-400 hover:text-black"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setShowLocationInput(true)}
-                        className="flex items-center gap-1 rounded-full bg-[#f2efe9] px-2.5 py-0.5 text-neutral-600 hover:text-black transition"
-                      >
-                        <MapPin className="h-3 w-3 text-neutral-500" />
-                        <span>{composerLocation}</span>
-                      </button>
-                    )}
-
-                    {/* Preview Switch Button */}
-                    <button
-                      type="button"
-                      onClick={() => setIsPreviewMode(!isPreviewMode)}
-                      className={`ml-auto flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition ${
-                        isPreviewMode
-                          ? "bg-black text-white"
-                          : "bg-[#f2efe9] text-neutral-600 hover:text-black"
-                      }`}
-                    >
-                      <Eye className="h-3 w-3" />
-                      <span>{isPreviewMode ? "Editing" : "Preview"}</span>
-                    </button>
-                  </div>
-
-                  {/* Input or Preview Mode */}
-                  {isPreviewMode ? (
-                    <div className="rounded-2xl border border-dashed border-[#dcd8ce] bg-[#fbfaf8] p-3 text-[13.5px] leading-relaxed text-neutral-800">
-                      <p>{composerText || "Preview text will show here..."}</p>
-                      {selectedFeeling && (
-                        <p className="mt-1 text-[12px] font-semibold text-amber-600">
-                          — feeling {selectedFeeling}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between rounded-2xl bg-[#f2efe9] px-4 py-2.5 focus-within:ring-1 focus-within:ring-[#1863dc]">
-                      <textarea
-                        ref={composerInputRef}
-                        data-post-composer
-                        rows={2}
-                        value={composerText}
-                        onChange={(e) => setComposerText(e.target.value)}
-                        placeholder="What's on your mind, Elena?"
-                        className="w-full resize-none bg-transparent text-[13.5px] text-[#18181b] placeholder-[#71717a] outline-none"
-                      />
-                      {isSubmittingPost || isUploadingMedia ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-[#1863dc]" />
-                      ) : (
-                        <Sparkles className="h-4 w-4 shrink-0 text-[#a1a1aa]" />
-                      )}
-                    </div>
-                  )}
+                <div className="flex flex-1 items-center justify-between rounded-full bg-[#f2efe9] px-4 sm:px-5 py-2.5 transition-colors group-hover:bg-[#edeae3]">
+                  <span className="text-[13.5px] text-[#71717a] font-normal select-none">
+                    What's on your mind{user?.name ? `, ${user.name.split(" ")[0]}` : ""}?
+                  </span>
+                  <Sparkles className="h-4 w-4 shrink-0 text-[#a1a1aa] transition-transform group-hover:rotate-12 group-hover:text-amber-500" />
                 </div>
               </div>
-
-              {/* Uploaded Media Preview Grid (Cloudinary attachments) */}
-              {composerMediaList.length > 0 && (
-                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2 px-1">
-                  {composerMediaList.map((media, idx) => (
-                    <div
-                      key={idx}
-                      className="group relative h-28 overflow-hidden rounded-xl border border-black/5 bg-neutral-100"
-                    >
-                      <img
-                        src={media.url}
-                        alt="Uploaded preview"
-                        className="h-full w-full object-cover"
-                      />
+            ) : (
+              /* Expanded View: Exact Match to Attached Screenshot */
+              <div className="animate-fade-in">
+                {/* Draft Banner if exists */}
+                {savedDraft && (
+                  <div className="mb-3 flex items-center justify-between rounded-xl bg-[#faf7f0] border border-[#f0ece0] px-3 py-1.5 text-[12px]">
+                    <div className="flex items-center gap-1.5 text-neutral-700">
+                      <FileText className="h-3.5 w-3.5 text-neutral-500" />
+                      <span>Unsaved draft from {savedDraft.savedAt}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => handleRemoveComposerMedia(idx)}
-                        className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black transition"
+                        onClick={handleRestoreDraft}
+                        className="font-semibold text-[#1863dc] hover:underline"
+                      >
+                        Restore
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleClearDraft}
+                        className="text-neutral-400 hover:text-rose-600"
+                      >
+                        Discard
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <form onSubmit={handleCreatePost}>
+                  {/* Top Bar: Profile Avatar, Public Dropdown, Location Pill, and Preview on far right */}
+                  <div className="flex items-center justify-between gap-2 select-none">
+                    <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+                      <img
+                        src={
+                          user?.avatar ||
+                          `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user?.username || "user")}`
+                        }
+                        alt={user?.name || user?.username || "Curator"}
+                        onError={(e) => {
+                          e.target.src = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user?.username || "user")}`;
+                        }}
+                        className="h-9 w-9 rounded-full object-cover ring-1 ring-black/5 shrink-0"
+                      />
+
+                      {/* Public Dropdown Pill */}
+                      <div className="relative flex items-center gap-1.5 rounded-full bg-[#f2efe9] px-3.5 py-1.5 text-[12.5px] font-medium text-[#27272a] hover:bg-[#edeae3] transition cursor-pointer">
+                        <Globe className="h-3.5 w-3.5 text-neutral-600 shrink-0" />
+                        <select
+                          value={postVisibility}
+                          onChange={(e) => setPostVisibility(e.target.value)}
+                          className="bg-transparent text-[12.5px] font-medium text-[#27272a] outline-none cursor-pointer appearance-none pr-3.5"
+                        >
+                          <option value="public">Public</option>
+                          <option value="close_friends">Close Friends</option>
+                          <option value="private">Only Me</option>
+                        </select>
+                        <ChevronDown className="h-3 w-3 text-neutral-500 pointer-events-none -ml-3" />
+                      </div>
+
+                      {/* Location Pill */}
+                      {showLocationInput ? (
+                        <div className="flex items-center gap-1 rounded-full bg-[#f2efe9] px-3 py-1 text-[12.5px]">
+                          <MapPin className="h-3.5 w-3.5 text-neutral-600 shrink-0" />
+                          <input
+                            type="text"
+                            value={composerLocation}
+                            onChange={(e) => setComposerLocation(e.target.value)}
+                            className="bg-transparent text-[12.5px] outline-none w-28 text-[#27272a]"
+                            placeholder="Location..."
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowLocationInput(false)}
+                            className="text-neutral-400 hover:text-black ml-1 text-sm font-bold"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setShowLocationInput(true)}
+                          className="flex items-center gap-1.5 rounded-full bg-[#f2efe9] px-3.5 py-1.5 text-[12.5px] font-medium text-[#27272a] hover:bg-[#edeae3] transition cursor-pointer"
+                        >
+                          <MapPin className="h-3.5 w-3.5 text-neutral-600 shrink-0" />
+                          <span>{composerLocation}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Far Right: Preview Switch & Clean Collapse */}
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsPreviewMode(!isPreviewMode)}
+                        className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] sm:text-[12.5px] font-medium transition cursor-pointer ${
+                          isPreviewMode
+                            ? "bg-[#18181b] text-white shadow-xs"
+                            : "bg-[#f2efe9] text-[#27272a] hover:bg-[#edeae3]"
+                        }`}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        <span>{isPreviewMode ? "Editing" : "Preview"}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (composerText.trim() || composerMediaList.length > 0) {
+                            handleSaveDraft();
+                          }
+                          setIsComposerExpanded(false);
+                        }}
+                        title="Collapse"
+                        className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-400 hover:bg-[#edeae3] hover:text-black transition"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
 
-              {/* Selected Feeling Pill */}
-              {selectedFeeling && (
-                <div className="mt-2.5 flex items-center gap-2 px-1">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[#fff5eb] border border-[#fbd8b5] px-2.5 py-0.5 text-[11px] font-medium text-[#b45309]">
-                    <span>Feeling {selectedFeeling}</span>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedFeeling("")}
-                      className="hover:text-black font-bold"
-                    >
-                      ×
-                    </button>
-                  </span>
-                </div>
-              )}
-
-              {/* Feelings Picker Popup */}
-              {showFeelingPicker && (
-                <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-[#fbfaf8] border border-[#ece8de] p-3 text-[12px] animate-fade-in">
-                  {[
-                    "✨ Grateful",
-                    "☕ Cozy",
-                    "📸 Inspired",
-                    "🍵 Calm",
-                    "🌿 Peaceful",
-                    "🎧 In the Groove",
-                    "🗼 Exploring",
-                    "🎨 Creating",
-                    "📚 Focused",
-                  ].map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => {
-                        setSelectedFeeling(f);
-                        setShowFeelingPicker(false);
-                      }}
-                      className="rounded-lg p-2 text-left hover:bg-[#edeae3] transition"
-                    >
-                      {f}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Hidden File Input for Cloudinary Uploads */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/*,video/*"
-                className="hidden"
-                onChange={handleMediaUpload}
-              />
-
-              {/* Composer Action Buttons */}
-              <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2 border-t border-[#f2eee4] pt-3 px-1">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploadingMedia}
-                    className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#3f3f46] hover:text-black transition disabled:opacity-50"
-                  >
-                    <ImageIcon className="h-4.5 w-4.5 text-[#10b981]" />
-                    <span>{isUploadingMedia ? "Uploading..." : "Photo/Video"}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowFeelingPicker(!showFeelingPicker)}
-                    className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#3f3f46] hover:text-black transition"
-                  >
-                    <Smile className="h-4.5 w-4.5 text-[#f59e0b]" />
-                    <span>Feeling</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setComposerText((t) => t + " @marcus_v @sarah_lin ");
-                    }}
-                    className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#3f3f46] hover:text-black transition"
-                  >
-                    <UserPlus className="h-4.5 w-4.5 text-[#1863dc]" />
-                    <span>Tag friends</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setComposerText((t) => t + " #StapleReel ");
-                    }}
-                    className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#3f3f46] hover:text-black transition"
-                  >
-                    <Film className="h-4.5 w-4.5 text-[#ef4444]" />
-                    <span>Reel</span>
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 ml-auto">
-                  <button
-                    type="button"
-                    onClick={handleSaveDraft}
-                    disabled={!composerText.trim() && composerMediaList.length === 0}
-                    className="rounded-full px-3 py-1 text-[12px] font-medium text-neutral-500 hover:bg-[#edeae3] hover:text-neutral-800 transition disabled:opacity-40"
-                  >
-                    Save Draft
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={
-                      isSubmittingPost ||
-                      isUploadingMedia ||
-                      (!composerText.trim() && composerMediaList.length === 0)
-                    }
-                    className="flex items-center gap-1.5 rounded-full bg-black px-5 py-1.5 text-[13px] font-semibold text-white shadow-xs transition hover:bg-neutral-800 active:scale-95 disabled:opacity-40"
-                  >
-                    {isSubmittingPost ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        <span>Posting...</span>
-                      </>
+                  {/* Middle Row: Full Width Large Rounded Input Box */}
+                  <div className="mt-3.5">
+                    {isPreviewMode ? (
+                      <div className="rounded-[22px] border border-dashed border-[#dcd8ce] bg-[#fbfaf8] p-4 text-[13.5px] leading-relaxed text-neutral-800 min-h-[96px]">
+                        <p className="whitespace-pre-wrap">{composerText || "Preview text will show here..."}</p>
+                        {selectedFeeling && (
+                          <p className="mt-2 text-[12px] font-semibold text-amber-600">
+                            — feeling {selectedFeeling}
+                          </p>
+                        )}
+                      </div>
                     ) : (
-                      <span>Post</span>
+                      <div className="relative rounded-[22px] bg-[#f2efe9] px-4 py-3 sm:px-5 sm:py-3.5 focus-within:ring-1 focus-within:ring-[#1863dc]/40 transition min-h-[96px] flex flex-col justify-between">
+                        <textarea
+                          ref={composerInputRef}
+                          data-post-composer
+                          rows={3}
+                          value={composerText}
+                          onChange={(e) => setComposerText(e.target.value)}
+                          placeholder="What's on your mind?"
+                          className="w-full resize-none bg-transparent text-[14px] text-[#18181b] placeholder-[#71717a] outline-none"
+                        />
+                        <div className="flex items-center justify-end pt-1">
+                          {isSubmittingPost || isUploadingMedia ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-[#1863dc]" />
+                          ) : (
+                            <Sparkles className="h-4 w-4 text-[#a1a1aa] transition-colors hover:text-amber-500" />
+                          )}
+                        </div>
+                      </div>
                     )}
-                  </button>
-                </div>
+                  </div>
+
+                  {/* Uploaded Media Preview Grid (Cloudinary attachments) */}
+                  {composerMediaList.length > 0 && (
+                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2 px-1">
+                      {composerMediaList.map((media, idx) => (
+                        <div
+                          key={idx}
+                          className="group relative h-28 overflow-hidden rounded-xl border border-black/5 bg-neutral-100"
+                        >
+                          <img
+                            src={media.url}
+                            alt="Uploaded preview"
+                            className="h-full w-full object-cover"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveComposerMedia(idx)}
+                            className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black transition"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Selected Feeling Pill */}
+                  {selectedFeeling && (
+                    <div className="mt-2.5 flex items-center gap-2 px-1">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#fff5eb] border border-[#fbd8b5] px-2.5 py-0.5 text-[11px] font-medium text-[#b45309]">
+                        <span>Feeling {selectedFeeling}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFeeling("")}
+                          className="hover:text-black font-bold ml-0.5"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Feelings Picker Popup */}
+                  {showFeelingPicker && (
+                    <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-[#fbfaf8] border border-[#ece8de] p-3 text-[12px] animate-fade-in">
+                      {[
+                        "✨ Grateful",
+                        "☕ Cozy",
+                        "📸 Inspired",
+                        "🍵 Calm",
+                        "🌿 Peaceful",
+                        "🎧 In the Groove",
+                        "🗼 Exploring",
+                        "🎨 Creating",
+                        "📚 Focused",
+                      ].map((f) => (
+                        <button
+                          key={f}
+                          type="button"
+                          onClick={() => {
+                            setSelectedFeeling(f);
+                            setShowFeelingPicker(false);
+                          }}
+                          className="rounded-lg p-2 text-left hover:bg-[#edeae3] transition"
+                        >
+                          {f}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Hidden File Input for Cloudinary Uploads */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*,video/*"
+                    className="hidden"
+                    onChange={handleMediaUpload}
+                  />
+
+                  {/* Bottom Action Bar: Photo/Video, Feeling, Tag friends, Reel, Save Draft, Post */}
+                  <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2.5 border-t border-[#f2eee4] pt-3 px-1">
+                    <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploadingMedia}
+                        className="flex items-center gap-1.5 text-[13px] font-medium text-[#27272a] hover:text-black transition disabled:opacity-50 cursor-pointer"
+                      >
+                        <ImageIcon className="h-4.5 w-4.5 text-[#10b981]" />
+                        <span>{isUploadingMedia ? "Uploading..." : "Photo/Video"}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowFeelingPicker(!showFeelingPicker)}
+                        className="flex items-center gap-1.5 text-[13px] font-medium text-[#27272a] hover:text-black transition cursor-pointer"
+                      >
+                        <Smile className="h-4.5 w-4.5 text-[#f59e0b]" />
+                        <span>Feeling</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setComposerText((t) => t + (t ? " " : "") + "@marcus_v @sarah_lin ");
+                        }}
+                        className="flex items-center gap-1.5 text-[13px] font-medium text-[#27272a] hover:text-black transition cursor-pointer"
+                      >
+                        <UserPlus className="h-4.5 w-4.5 text-[#2563eb]" />
+                        <span>Tag friends</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setComposerText((t) => t + (t ? " " : "") + "#StapleReel ");
+                        }}
+                        className="flex items-center gap-1.5 text-[13px] font-medium text-[#27272a] hover:text-black transition cursor-pointer"
+                      >
+                        <Film className="h-4.5 w-4.5 text-[#ef4444]" />
+                        <span>Reel</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-3 ml-auto">
+                      <button
+                        type="button"
+                        onClick={handleSaveDraft}
+                        disabled={!composerText.trim() && composerMediaList.length === 0}
+                        className="text-[13px] font-medium text-[#9ca3af] hover:text-[#4b5563] transition disabled:opacity-40 cursor-pointer"
+                      >
+                        Save Draft
+                      </button>
+
+                      <button
+                        type="submit"
+                        disabled={
+                          isSubmittingPost ||
+                          isUploadingMedia ||
+                          (!composerText.trim() && composerMediaList.length === 0)
+                        }
+                        className={`flex items-center gap-1.5 rounded-full px-6 py-2 text-[13.5px] font-semibold text-white transition-all ${
+                          !composerText.trim() && composerMediaList.length === 0
+                            ? "bg-[#808080] cursor-not-allowed opacity-90"
+                            : "bg-[#18181b] hover:bg-black cursor-pointer shadow-xs active:scale-95"
+                        }`}
+                      >
+                        {isSubmittingPost ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Posting...</span>
+                          </>
+                        ) : (
+                          <span>Post</span>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </form>
               </div>
-            </form>
+            )}
           </div>
 
           {/* LOADING STATE */}
@@ -1046,14 +1179,29 @@ export default function HomePage() {
           {!isLoadingFeed &&
             posts.map((post) => {
               const author = post.authorId || {};
-              const isAuthorElena = author.username === "elenavance";
+              const isAuthorSelf =
+                Boolean(
+                  (author._id && user?._id && author._id === user._id) ||
+                  (author.id && user?.id && author.id === user.id) ||
+                  (author.username && user?.username && author.username.toLowerCase() === user.username.toLowerCase())
+                );
               const isPlayingAudio = activeAudioPostId === post._id;
 
               return (
                 <article
                   key={post._id}
-                  className="rounded-[22px] border border-[#ece8de]/60 bg-white p-5 sm:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] animate-fade-in-slide"
+                  onDoubleClick={(e) => handlePostDoubleClick(post._id, e)}
+                  className="relative rounded-[22px] border border-[#ece8de]/60 bg-white p-5 sm:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] animate-fade-in-slide overflow-hidden cursor-pointer select-none"
                 >
+                  {/* Instagram-style Flying Red Heart Overlay on Double-Click */}
+                  {flyingHeartPostId === post._id && (
+                    <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center">
+                      <div className="animate-heart-pop-fly text-6xl sm:text-7xl select-none filter drop-shadow-[0_8px_24px_rgba(239,68,68,0.75)]">
+                        ❤️
+                      </div>
+                    </div>
+                  )}
+
                   {/* Header */}
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
@@ -1063,7 +1211,7 @@ export default function HomePage() {
                           alt={author.name}
                           onError={(e) => {
                             e.target.src =
-                              author.fallbackAvatar || "/recreation/avatar_left_elena.png";
+                              author.fallbackAvatar || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(author.username || "user")}`;
                           }}
                           className="h-9 w-9 rounded-full object-cover ring-1 ring-black/5"
                         />
@@ -1080,10 +1228,10 @@ export default function HomePage() {
                       <div>
                         <div className="flex items-center gap-1.5 leading-tight">
                           <Link
-                            to={`/u/${author.username || "elenavance"}`}
+                            to={`/u/${author.username || "curator"}`}
                             className="text-[13.5px] font-semibold text-[#18181b] hover:underline"
                           >
-                            {author.name || "Elena Vance"}
+                            {author.name || author.username || "Curator"}
                           </Link>
                           {author.isVerified && (
                             <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#1863dc] text-white">
@@ -1091,8 +1239,8 @@ export default function HomePage() {
                             </span>
                           )}
                           <span className="text-[12px] text-[#71717a]">
-                            {author.username ? `@${author.username} • ` : "• "}
-                            {post.time || "Just now"}
+                            {author.username ? `@${author.username}` : ""}
+                            {post.time || ""}
                           </span>
                         </div>
                         {post.location && (
@@ -1112,7 +1260,7 @@ export default function HomePage() {
                       )}
 
                       {/* Edit Button for own posts */}
-                      {isAuthorElena && (
+                      {isAuthorSelf && (
                         <button
                           type="button"
                           onClick={() => setEditingPost(post)}
@@ -1127,8 +1275,8 @@ export default function HomePage() {
                         type="button"
                         aria-label="More options"
                         onClick={() => {
-                          if (isAuthorElena) {
-                            handleDeletePost(post._id);
+                          if (isAuthorSelf) {
+                            handleOpenDeleteModal(post);
                           } else {
                             navigator.clipboard?.writeText(
                               window.location.origin + "/post/" + post._id
@@ -1138,7 +1286,7 @@ export default function HomePage() {
                         }}
                         className="rounded-lg p-1 text-[#71717a] hover:text-black transition"
                       >
-                        {isAuthorElena ? (
+                        {isAuthorSelf ? (
                           <Trash2 className="h-4 w-4 text-[#ef4444]" />
                         ) : (
                           <MoreHorizontal className="h-4 w-4" />
@@ -1294,7 +1442,9 @@ export default function HomePage() {
                       <button
                         type="button"
                         onClick={() => handleToggleLike(post._id)}
-                        className="flex items-center gap-1.5 transition active:scale-90"
+                        className={`flex items-center gap-1.5 transition active:scale-90 ${
+                          bouncingLikePostId === post._id ? "animate-like-bounce" : ""
+                        }`}
                       >
                         <Heart
                           className={`h-5 w-5 transition-transform ${
@@ -1378,7 +1528,7 @@ export default function HomePage() {
                         <div className="flex items-start justify-between">
                           <div>
                             <span className="font-semibold text-black">
-                              {comm.author?.name || "Elena Vance"}
+                              {comm.author?.name || ""}
                             </span>{" "}
                             <span>{comm.content}</span>
                           </div>
@@ -1395,7 +1545,7 @@ export default function HomePage() {
                             >
                               Reply
                             </button>
-                            {comm.author?.name === "Elena Vance" && (
+                            {comm.author?.userId === (user?.id || user?._id) && (
                               <button
                                 type="button"
                                 onClick={() => handleDeleteComment(post._id, comm._id)}
@@ -1413,7 +1563,7 @@ export default function HomePage() {
                             {comm.replies.map((reply, rIdx) => (
                               <div key={reply._id || rIdx} className="text-[12px]">
                                 <span className="font-semibold text-black">
-                                  {reply.author?.name || "Elena Vance"}
+                                  {reply.author?.name || ""}
                                 </span>{" "}
                                 <span className="text-neutral-700">{reply.content}</span>
                               </div>
@@ -1460,8 +1610,11 @@ export default function HomePage() {
                   >
                     <div className="flex flex-1 items-center gap-2">
                       <img
-                        src="/recreation/avatar_left_elena_hires.png"
-                        alt="Elena Vance"
+                        src={
+                          user?.avatar ||
+                          `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user?.username || "user")}`
+                        }
+                        alt={user?.name || user?.username || "Curator"}
                         className="h-5 w-5 rounded-full object-cover"
                       />
                       <input
@@ -1490,8 +1643,8 @@ export default function HomePage() {
             })}
         </section>
 
-        {/* RIGHT WIDGETS COLUMN (Desktop): Broad and spacious */}
-        <aside className="hidden w-[330px] xl:w-[350px] shrink-0 space-y-4 sm:space-y-5 xl:block">
+        {/* RIGHT WIDGETS COLUMN (Desktop): Broad, spacious, and sticky (does NOT scroll) */}
+        <aside className="sticky top-0 self-start hidden h-screen w-[330px] xl:w-[350px] shrink-0 space-y-3.5 xl:flex xl:flex-col overflow-hidden pb-6">
           {/* SEARCH BAR & SUGGESTIONS */}
           <div className="relative">
             <div className="relative flex items-center rounded-full border border-[#ece8de]/60 bg-white px-4 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] focus-within:border-neutral-400">
@@ -1520,24 +1673,10 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Recent Searches Dropdown */}
+            {/* Search helper */}
             {isSearchFocused && !searchQuery && (
-              <div className="absolute top-12 inset-x-0 z-30 rounded-2xl border border-[#ece8de] bg-white p-3 shadow-xl animate-fade-in">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">
-                  Recent Searches
-                </span>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {recentSearches.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setSearchQuery(s.replace("#", ""))}
-                      className="rounded-full bg-[#f4f2ea] px-2.5 py-1 text-[11.5px] font-medium text-neutral-700 hover:bg-[#eae6dd]"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
+              <div className="absolute top-12 inset-x-0 z-30 rounded-2xl border border-[#ece8de] bg-white p-3 text-xs text-[#71717a] shadow-xl animate-fade-in">
+                Search posts by caption, tag, or creator.
               </div>
             )}
           </div>
@@ -1558,7 +1697,7 @@ export default function HomePage() {
             </div>
 
             <div className="space-y-3.5">
-              {people.map((person) => (
+              {people.slice(0, 3).map((person) => (
                 <div key={person.id} className="group/item flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0">
                     <Link to={`/u/${person.username || person.id}`}>
@@ -1567,7 +1706,7 @@ export default function HomePage() {
                           src={person.avatar}
                           alt={person.name}
                           onError={(e) => {
-                            e.target.src = person.fallback || "/recreation/avatar_marcus.png";
+                            e.currentTarget.src = person.fallback || "/default-avatar.svg";
                           }}
                           className="h-8.5 w-8.5 rounded-full object-cover ring-1 ring-black/5"
                         />
@@ -1685,7 +1824,7 @@ export default function HomePage() {
             </div>
 
             <div className="space-y-3.5">
-              {groups.map((group) => (
+              {groups.slice(0, 2).map((group) => (
                 <div key={group.id} className="flex items-center justify-between">
                   <div
                     onClick={() => setSelectedGroup(group)}
@@ -1815,6 +1954,14 @@ export default function HomePage() {
           showToast("Post updated in database!");
           loadSidebarData();
         }}
+      />
+
+      {/* DELETE POST MODAL (Hold to Delete) */}
+      <DeletePostModal
+        isOpen={!!deletingPost}
+        post={deletingPost}
+        onClose={() => setDeletingPost(null)}
+        onConfirmDelete={handleConfirmDeletePost}
       />
     </div>
   );

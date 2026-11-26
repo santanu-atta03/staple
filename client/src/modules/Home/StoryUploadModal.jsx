@@ -70,11 +70,22 @@ export default function StoryUploadModal({ isOpen, onClose, onStoryCreated, curr
             className="group relative flex h-64 w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-[#dcd8ce] bg-[#faf9f5] hover:border-black transition"
           >
             {previewUrl ? (
-              <img
-                src={previewUrl}
-                alt="Story preview"
-                className="h-full w-full object-cover"
-              />
+              selectedFile?.type?.startsWith("video/") ? (
+                <video
+                  src={previewUrl}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <img
+                  src={previewUrl}
+                  alt="Story preview"
+                  className="h-full w-full object-cover"
+                />
+              )
             ) : (
               <div className="flex flex-col items-center gap-2 p-6 text-center text-neutral-500">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#edeae3] group-hover:scale-105 transition">

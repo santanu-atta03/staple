@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Home,
@@ -12,51 +12,95 @@ import {
   MoreHorizontal,
   Check,
   Search,
+  LogOut,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import BrandMark from "./BrandMark";
 import GlobalPostModal from "./GlobalPostModal";
 
 export default function AppLayout() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const menuRef = useRef(null);
+
+  const userDisplayName = user?.name || user?.username || "Account";
+  const userHandle = user?.username || "me";
+  const fallbackAvatar = "/default-avatar.svg";
+  const userAvatar = user?.avatar || fallbackAvatar;
+
+  // Close popup menu when clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setShowUserMenu(false);
+      }
+    };
+    if (showUserMenu) {
+      document.addEventListener("mousedown", handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, [showUserMenu]);
+
+  const handleLogout = async () => {
+    setShowUserMenu(false);
+    if (logout) {
+      await logout();
+    }
+    navigate("/signin");
+  };
+
+  const isFixedLayout =
+    location.pathname === "/" ||
+    location.pathname === "/explore" ||
+    location.pathname === "/notifications" ||
+    location.pathname === "/messages" ||
+    location.pathname === "/settings" ||
+    location.pathname.startsWith("/u/");
+
+  // Ensure window position is cleanly reset to top when switching routes
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   const handleOpenCreatePost = () => {
-    const composer = document.querySelector("[data-post-composer]");
-    if (location.pathname === "/" && composer) {
-      composer.focus();
-      composer.scrollIntoView({ behavior: "smooth", block: "center" });
-    } else {
-      setShowCreateModal(true);
+    if (location.pathname === "/") {
+      const pill = document.querySelector("[data-post-composer-pill]");
+      if (pill) {
+        pill.click();
+        pill.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      const composer = document.querySelector("[data-post-composer]");
+      if (composer) {
+        composer.focus();
+        composer.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
     }
+    setShowCreateModal(true);
   };
 
   const navItems = [
     { to: "/", label: "Home", icon: Home, exact: true },
     { to: "/explore", label: "Explore", icon: Compass },
-    {
-      to: "/notifications",
-      label: "Notifications",
-      icon: Bell,
-      badge: 4,
-      badgeColor: "bg-[#e8998d] text-white",
-    },
-    {
-      to: "/messages",
-      label: "Messages",
-      icon: MessageSquare,
-      badge: 2,
-      badgeColor: "bg-[#8bd0be] text-white",
-    },
+    { to: "/notifications", label: "Notifications", icon: Bell },
+    { to: "/messages", label: "Messages", icon: MessageSquare },
     { to: "/bookmarks", label: "Bookmarks", icon: Bookmark },
-    { to: `/u/${user?.username || "elenavance"}`, label: "Profile", icon: User },
+    { to: `/u/${userHandle}`, label: "Profile", icon: User },
     { to: "/settings", label: "Settings", icon: Settings },
   ];
 
   return (
-    <div className="min-h-screen w-full bg-[#faf9f5] text-[#1c1c1e] antialiased overflow-x-hidden">
+    <div
+      className={`min-h-screen w-full bg-[#faf9f5] text-[#1c1c1e] antialiased ${
+        isFixedLayout ? "lg:h-screen lg:overflow-hidden" : "overflow-x-hidden"
+      }`}
+    >
       {/* Mobile Top Header matching mobile reference exactly */}
       <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-[#ece8de] bg-[#fbf9f4]/95 px-3 sm:px-4 backdrop-blur-md lg:hidden">
         <NavLink to="/" className="flex items-center shrink-0">
@@ -74,17 +118,16 @@ export default function AppLayout() {
             className="relative flex h-8 w-8 items-center justify-center rounded-full text-neutral-800 hover:bg-[#edeae3] transition"
           >
             <Bell className="h-5 w-5 stroke-[2]" />
-            <span className="absolute top-1 right-1 flex h-2 w-2 rounded-full bg-[#ffad9b]" />
           </NavLink>
           <NavLink
-            to={`/u/${user?.username || "elenavance"}`}
+            to={`/u/${userHandle}`}
             className="flex items-center shrink-0"
           >
             <img
-              src="/notifications/elena.png"
-              alt={user?.name || "Elena Vance"}
+              src={userAvatar}
+              alt={userDisplayName}
               onError={(e) => {
-                e.target.src = "/recreation/avatar_left_elena.png";
+                e.target.src = fallbackAvatar;
               }}
               className="h-8 w-8 rounded-full object-cover ring-1 ring-black/5"
             />
@@ -93,9 +136,19 @@ export default function AppLayout() {
       </header>
 
       {/* Main Page Layout Container: Broad and expansive across the page */}
-      <div className="mx-auto flex w-full max-w-[1520px] justify-between px-3 sm:px-6 lg:px-8 xl:px-10 overflow-x-hidden">
+      <div
+        className={`mx-auto flex w-full max-w-[1520px] justify-between px-3 sm:px-6 lg:px-8 xl:px-10 ${
+          isFixedLayout ? "lg:h-screen lg:overflow-hidden" : "overflow-x-clip"
+        }`}
+      >
         {/* Left Sticky Navigation Column (Desktop) */}
-        <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-[240px] shrink-0 flex-col justify-between pb-2 pr-5 lg:flex">
+        <aside
+          className={`sticky top-0 hidden ${
+            isFixedLayout
+              ? "h-screen py-3 overflow-hidden"
+              : "h-[calc(100vh-2rem)] top-4"
+          } w-[240px] shrink-0 flex-col justify-between pb-2 pr-5 lg:flex select-none`}
+        >
           <div className="space-y-4">
             {/* Logo */}
             <div className="px-2 pt-1 pb-1">
@@ -133,13 +186,6 @@ export default function AppLayout() {
                       <span>{item.label}</span>
                     </div>
 
-                    {item.badge && (
-                      <span
-                        className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10.5px] font-bold tracking-tight ${item.badgeColor}`}
-                      >
-                        {item.badge}
-                      </span>
-                    )}
                   </NavLink>
                 );
               })}
@@ -159,15 +205,60 @@ export default function AppLayout() {
           </div>
 
           {/* User Account Row at bottom of Sidebar */}
-          <div className="pt-4">
-            <div className="flex items-center justify-between rounded-2xl p-2 transition hover:bg-[#edeae3]">
+          <div className="pt-4 relative" ref={menuRef}>
+            {/* Account Popover Menu */}
+            {showUserMenu && (
+              <div className="absolute bottom-16 left-0 right-0 z-50 rounded-2xl border border-[#ece8de] bg-white p-2 shadow-xl animate-scale-in">
+                <div className="px-3 py-2 border-b border-[#ece8de]/60">
+                  <p className="text-[13px] font-semibold text-[#18181b] truncate">
+                    {userDisplayName}
+                  </p>
+                  <p className="text-[11.5px] text-[#71717a] truncate">
+                    @{userHandle}
+                  </p>
+                </div>
+                <div className="py-1">
+                  <NavLink
+                    to={`/u/${userHandle}`}
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium text-[#18181b] hover:bg-[#f4f2ea] transition"
+                  >
+                    <User className="h-4 w-4 stroke-[2] text-[#71717a]" />
+                    <span>View Profile</span>
+                  </NavLink>
+                  <NavLink
+                    to="/settings"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium text-[#18181b] hover:bg-[#f4f2ea] transition"
+                  >
+                    <Settings className="h-4 w-4 stroke-[2] text-[#71717a]" />
+                    <span>Settings</span>
+                  </NavLink>
+                </div>
+                <div className="border-t border-[#ece8de]/60 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium text-[#ef4444] hover:bg-[#fef2f2] transition cursor-pointer"
+                  >
+                    <LogOut className="h-4 w-4 stroke-[2] text-[#ef4444]" />
+                    <span>Log Out</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="flex items-center justify-between rounded-2xl p-2 transition hover:bg-[#edeae3] cursor-pointer"
+            >
               <div className="flex min-w-0 items-center gap-3">
                 <div className="relative">
                   <img
-                    src="/recreation/avatar_left_elena_hires.png"
-                    alt={user?.name || "Elena Vance"}
+                    src={userAvatar}
+                    alt={userDisplayName}
                     onError={(e) => {
-                      e.target.src = "/recreation/avatar_left_elena.png";
+                      e.target.src = fallbackAvatar;
                     }}
                     className="h-9 w-9 rounded-full object-cover ring-1 ring-black/5"
                   />
@@ -175,31 +266,36 @@ export default function AppLayout() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-1">
                     <span className="truncate text-[13px] font-semibold text-[#18181b]">
-                      Elena Vance
+                      {userDisplayName}
                     </span>
                     <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#1863dc] text-white">
                       <Check className="h-2 w-2 stroke-[3]" />
                     </span>
                   </div>
                   <span className="block truncate text-[11.5px] text-[#71717a]">
-                    @elenavance
+                    @{userHandle}
                   </span>
                 </div>
               </div>
 
-              <button
-                type="button"
-                aria-label="User settings"
+              <div
+                aria-label="User menu"
                 className="rounded-lg p-1 text-[#71717a] hover:text-black"
               >
                 <MoreHorizontal className="h-4 w-4" />
-              </button>
+              </div>
             </div>
           </div>
         </aside>
 
         {/* Center & Right Column Shell */}
-        <main className="min-w-0 max-w-full w-full flex-1 pb-20 lg:pb-10">
+        <main
+          className={`min-w-0 max-w-full w-full flex-1 ${
+            isFixedLayout
+              ? "lg:h-screen lg:overflow-hidden pb-20 lg:pb-0"
+              : "pb-20 lg:pb-10"
+          }`}
+        >
           <Outlet />
         </main>
       </div>

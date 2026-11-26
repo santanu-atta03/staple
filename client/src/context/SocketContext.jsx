@@ -26,8 +26,10 @@ export function SocketProvider({ children }) {
 
     const token = localStorage.getItem("accessToken");
     const socketInstance = io("/", {
-      auth: { token },
-      transports: ["websocket", "polling"],
+      auth: { token: token || "guest" },
+      transports: ["polling", "websocket"],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
     });
 
     socketInstance.on("notification:new", ({ unreadCount: nextCount }) => {

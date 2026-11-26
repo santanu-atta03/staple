@@ -1,14 +1,35 @@
 const redis = require("../../config/redis");
 const Post = require("./post.model");
 const Feed = require("../feed/feed.model");
+const Follow = require("../follows/follow.model");
+const User = require("../users/user.model");
 const followService = require("../follows/follow.service");
 const { socialQueue } = require("../../queues/social.queue");
 
-const createPost = async ({ authorId, content, media = [] }) => {
+const canViewPost = async (post, viewerId) => {
+  if (!post || post.isDeleted) return false;
+  const authorId = post.authorId?._id || post.authorId;
+  const isOwner = viewerId && authorId.toString() === viewerId.toString();
+  if (isOwner) return true;
+
+  const author = post.authorId?.isPrivate !== undefined
+    ? post.authorId
+    : await User.findById(authorId).select("isPrivate").lean();
+  const followsAuthor = viewerId
+    ? await Follow.exists({ followerId: viewerId, followingId: authorId })
+    : false;
+  if (author?.isPrivate && !followsAuthor) return false;
+  if (!post.visibility || post.visibility === "public") return true;
+  return post.visibility === "followers" && Boolean(followsAuthor);
+};
+
+const createPost = async ({ authorId, content, media = [], tags = [], location = "" }) => {
   const post = await Post.create({
     authorId,
     content,
     media,
+    tags,
+    location,
   });
 
   const populatedPost = await post.populate("authorId", "username name avatar");
@@ -27,28 +48,28 @@ const createPost = async ({ authorId, content, media = [] }) => {
   return populatedPost;
 };
 
-const getPostById = async (postId) => {
-  const cacheKey = `post:${postId}`;
-  const cached = await redis.get(cacheKey);
-  if (cached) {
-    return { source: "cache", post: JSON.parse(cached) };
-  }
-
+const getPostById = async (postId, viewerId = null) => {
   const post = await Post.findById(postId)
-    .populate("authorId", "username name avatar")
+    .populate("authorId", "username name avatar isPrivate")
     .lean();
 
-  if (!post) {
+  if (!(await canViewPost(post, viewerId))) {
     const err = new Error("Post not found");
     err.statusCode = 404;
     throw err;
+  }
+
+  const cacheKey = `post:${postId}`;
+  if (post.visibility === "public") {
+    const cached = await redis.get(cacheKey);
+    if (cached) return { source: "cache", post: JSON.parse(cached) };
   }
 
   await redis.set(cacheKey, JSON.stringify(post), "EX", 600);
   return { source: "db", post };
 };
 
-const updatePost = async ({ postId, userId, content, media }) => {
+const updatePost = async ({ postId, userId, content, media, tags, location }) => {
   const post = await Post.findById(postId);
   if (!post) {
     const err = new Error("Post not found");
@@ -64,6 +85,8 @@ const updatePost = async ({ postId, userId, content, media }) => {
 
   if (content !== undefined) post.content = content;
   if (media !== undefined) post.media = media;
+  if (tags !== undefined) post.tags = tags;
+  if (location !== undefined) post.location = location;
   await post.save();
 
   await redis.del(`post:${postId}`);
@@ -92,9 +115,31 @@ const deletePost = async ({ postId, userId }) => {
   ]);
 };
 
-const getPostsByUser = async (userId, page = 1, limit = 20) => {
+const getPostsByUser = async (userId, page = 1, limit = 20, viewerId = null) => {
   const skip = (page - 1) * limit;
-  return Post.find({ authorId: userId })
+  const targetUser = await User.findById(userId).select("isPrivate").lean();
+  if (!targetUser) return [];
+  const followsAuthor = viewerId && viewerId.toString() !== userId.toString()
+    ? await Follow.exists({ followerId: viewerId, followingId: userId })
+    : false;
+  const isOwner = viewerId && viewerId.toString() === userId.toString();
+  if (targetUser.isPrivate && !isOwner && !followsAuthor) return [];
+
+  const visibility = [
+    { visibility: "public" },
+    { visibility: { $exists: false } },
+  ];
+  if (followsAuthor) visibility.push({ visibility: "followers" });
+  if (isOwner) {
+    visibility.push({ visibility: "private" }, { visibility: "followers" });
+  }
+  return Post.find({
+    authorId: userId,
+    $and: [
+      { $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }] },
+      { $or: visibility },
+    ],
+  })
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
@@ -108,4 +153,5 @@ module.exports = {
   updatePost,
   deletePost,
   getPostsByUser,
+  canViewPost,
 };
