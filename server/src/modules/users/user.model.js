@@ -107,6 +107,32 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    isSuspended: {
+      type: Boolean,
+      default: false,
+    },
+
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
+    },
+
+    deactivatedAt: {
+      type: Date,
+      default: null,
+    },
+
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

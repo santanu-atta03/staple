@@ -15,8 +15,17 @@ const refreshCookieOptions = {
   maxAge: Number(process.env.REFRESH_TOKEN_DAYS || 7) * 24 * 60 * 60 * 1000,
 };
 
-const setRefreshCookie = (res, token) => {
-  res.cookie("refreshToken", token, refreshCookieOptions);
+const getRequestMeta = (req, rememberMe = true) => ({
+  userAgent: req.get("user-agent") || "Unknown device",
+  ipAddress: req.ip || req.socket?.remoteAddress || "",
+  rememberMe,
+});
+
+const setRefreshCookie = (res, token, rememberMe = true) => {
+  const maxAge = rememberMe
+    ? Number(process.env.REFRESH_TOKEN_DAYS || 7) * 24 * 60 * 60 * 1000
+    : 24 * 60 * 60 * 1000;
+  res.cookie("refreshToken", token, { ...refreshCookieOptions, maxAge });
 };
 
 const clearRefreshCookie = (res) => {
@@ -101,8 +110,8 @@ const verifyOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: "Email and a six-digit verification code are required" });
     }
 
-    const result = await authService.completeRegistration({ email, otp });
-    setRefreshCookie(res, result.refreshToken);
+    const result = await authService.completeRegistration({ email, otp }, getRequestMeta(req, true));
+    setRefreshCookie(res, result.refreshToken, result.rememberMe);
     return res.status(201).json({
       success: true,
       message: "Account verified and created",
@@ -133,9 +142,9 @@ const resendOtp = async (req, res) => {
 
 const login = async (req, res) => {
   try {
-    const { email, password } = req.validatedBody;
-    const result = await authService.loginUser(email, password);
-    setRefreshCookie(res, result.refreshToken);
+    const { email, password, rememberMe } = req.validatedBody;
+    const result = await authService.loginUser(email, password, getRequestMeta(req, rememberMe !== false));
+    setRefreshCookie(res, result.refreshToken, result.rememberMe);
     return res.status(200).json({
       success: true,
       message: "Login successful",
@@ -144,7 +153,14 @@ const login = async (req, res) => {
     });
   } catch (error) {
     if (error.message === "INVALID_CREDENTIALS") {
-      return res.status(401).json({ success: false, message: "Invalid email or password" });
+      return res.status(401).json({ success: false, message: "Invalid email/username or password" });
+    }
+    if (error.message === "ACCOUNT_DEACTIVATED") {
+      return res.status(403).json({
+        success: false,
+        code: "ACCOUNT_DEACTIVATED",
+        message: "This account is deactivated. You can reactivate it to sign back in.",
+      });
     }
     return sendError(res, error, "Login failed");
   }
@@ -160,8 +176,8 @@ const refresh = async (req, res) => {
       clearRefreshCookie(res);
       return res.status(204).end();
     }
-    const result = await authService.refreshSession(oldToken);
-    setRefreshCookie(res, result.refreshToken);
+    const result = await authService.refreshSession(oldToken, getRequestMeta(req));
+    setRefreshCookie(res, result.refreshToken, result.rememberMe);
     return res.status(200).json({ success: true, accessToken: result.accessToken });
   } catch (error) {
     clearRefreshCookie(res);
@@ -371,6 +387,90 @@ const isSameOrigin = (req) => {
   return origin === expectedOrigin;
 };
 
+const getSessions = async (req, res) => {
+  try {
+    const sessions = await authService.getActiveSessions(req.user.id, req.user.sessionId);
+    return res.status(200).json({ success: true, sessions });
+  } catch (error) {
+    return sendError(res, error, "Could not load active sessions");
+  }
+};
+
+const revokeSession = async (req, res) => {
+  try {
+    const revoked = await authService.revokeSessionById(req.user.id, req.params.sessionId);
+    if (!revoked) {
+      return res.status(404).json({ success: false, message: "Session not found" });
+    }
+    const sessions = await authService.getActiveSessions(req.user.id, req.user.sessionId);
+    return res.status(200).json({ success: true, message: "Session revoked", sessions });
+  } catch (error) {
+    return sendError(res, error, "Could not revoke session");
+  }
+};
+
+const logoutAllDevices = async (req, res) => {
+  try {
+    const keepCurrent = req.body?.keepCurrent !== false;
+    await authService.revokeAllSessions(req.user.id, keepCurrent ? req.user.sessionId : null);
+    if (!keepCurrent) {
+      clearRefreshCookie(res);
+    }
+    const sessions = keepCurrent
+      ? await authService.getActiveSessions(req.user.id, req.user.sessionId)
+      : [];
+    return res.status(200).json({
+      success: true,
+      message: keepCurrent ? "Logged out from all other devices" : "Logged out from all devices",
+      sessions,
+    });
+  } catch (error) {
+    return sendError(res, error, "Could not terminate sessions");
+  }
+};
+
+const deactivateAccount = async (req, res) => {
+  try {
+    await authService.deactivateAccount(req.user.id, req.body?.password);
+    clearRefreshCookie(res);
+    return res.status(200).json({ success: true, message: "Account deactivated successfully" });
+  } catch (error) {
+    return sendError(res, error, "Could not deactivate account");
+  }
+};
+
+const reactivateAccount = async (req, res) => {
+  try {
+    const { email, password, rememberMe } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: "Email or username and password are required" });
+    }
+    const result = await authService.reactivateAccount(email, password, getRequestMeta(req, rememberMe !== false));
+    setRefreshCookie(res, result.refreshToken, result.rememberMe);
+    return res.status(200).json({
+      success: true,
+      message: "Account reactivated",
+      user: result.user,
+      accessToken: result.accessToken,
+    });
+  } catch (error) {
+    if (error.message === "INVALID_CREDENTIALS") {
+      return res.status(401).json({ success: false, message: "Invalid email/username or password" });
+    }
+    return sendError(res, error, "Could not reactivate account");
+  }
+};
+
+const deleteAccount = async (req, res) => {
+  try {
+    await authService.deleteAccount(req.user.id, req.body?.password);
+    clearRefreshCookie(res);
+    return res.status(200).json({ success: true, message: "Account deleted permanently" });
+  } catch (error) {
+    return sendError(res, error, "Could not delete account");
+  }
+};
+
 module.exports = {
   getMe,
   registerInitiate,
@@ -386,4 +486,10 @@ module.exports = {
   resetPassword,
   refresh,
   logout,
+  getSessions,
+  revokeSession,
+  logoutAllDevices,
+  deactivateAccount,
+  reactivateAccount,
+  deleteAccount,
 };

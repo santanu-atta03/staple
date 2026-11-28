@@ -106,24 +106,27 @@ router.get("/conversations", (req, res) => {
 
 router.get("/people", async (req, res, next) => {
   const query = String(req.query.q || "").trim();
-  if (query.length < 2) {
-    return res.json({ success: true, people: [] });
-  }
+  const viewerId = req.user.id;
 
   try {
-    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const people = await User.find({
-      _id: { $ne: req.user.id },
+    const filter = {
+      _id: { $ne: viewerId },
       isActive: true,
       emailVerified: true,
-      $or: [
+    };
+
+    if (query.length >= 1) {
+      const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      filter.$or = [
         { username: { $regex: escapedQuery, $options: "i" } },
         { fullName: { $regex: escapedQuery, $options: "i" } },
-      ],
-    })
+      ];
+    }
+
+    const people = await User.find(filter)
       .select("_id username fullName avatar")
       .sort({ username: 1 })
-      .limit(20)
+      .limit(30)
       .lean();
 
     return res.json({

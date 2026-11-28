@@ -9,7 +9,7 @@ export default function NewMessageModal({ isOpen, onClose, onSelectUser }) {
   const [searchError, setSearchError] = useState("");
 
   useEffect(() => {
-    if (!isOpen || query.trim().length < 2) {
+    if (!isOpen) {
       setPeople([]);
       setIsLoading(false);
       setSearchError("");
@@ -34,7 +34,7 @@ export default function NewMessageModal({ isOpen, onClose, onSelectUser }) {
         .finally(() => {
           if (active) setIsLoading(false);
         });
-    }, 250);
+    }, query.trim() ? 220 : 0);
 
     return () => {
       active = false;
@@ -84,13 +84,11 @@ export default function NewMessageModal({ isOpen, onClose, onSelectUser }) {
             </div>
           ) : searchError ? (
             <p className="p-4 text-center text-xs text-[#b42318]">{searchError}</p>
-          ) : query.trim().length < 2 ? (
-            <p className="p-4 text-center text-xs text-[#71717a]">
-              Enter at least two characters to find an account.
-            </p>
           ) : people.length === 0 ? (
             <p className="p-4 text-center text-xs text-[#71717a]">
-              No accounts found for "{query.trim()}".
+              {query.trim()
+                ? `No accounts found for "${query.trim()}".`
+                : "No other accounts found yet."}
             </p>
           ) : (
             people.map((person) => (

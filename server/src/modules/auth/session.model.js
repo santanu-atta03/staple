@@ -12,8 +12,8 @@ const sessionSchema = new mongoose.Schema(
 
     refreshTokenHash: {
       type: String,
-      required: true,
       unique: true,
+      sparse: true,
       select: false,
     },
 
@@ -25,6 +25,28 @@ const sessionSchema = new mongoose.Schema(
     revokedAt: {
       type: Date,
       default: null,
+    },
+
+    userAgent: {
+      type: String,
+      default: "Unknown device",
+      maxlength: 300,
+    },
+
+    ipAddress: {
+      type: String,
+      default: "",
+      maxlength: 100,
+    },
+
+    lastActiveAt: {
+      type: Date,
+      default: Date.now,
+    },
+
+    rememberMe: {
+      type: Boolean,
+      default: true,
     },
   },
   {

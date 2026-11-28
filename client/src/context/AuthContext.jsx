@@ -58,6 +58,15 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const handleSessionExpired = () => {
+      setAccessToken(null);
+      setUser(null);
+    };
+    window.addEventListener("staple:session_expired", handleSessionExpired);
+    return () => window.removeEventListener("staple:session_expired", handleSessionExpired);
+  }, []);
+
+  useEffect(() => {
     let active = true;
 
     const restoreSession = () => {
@@ -159,6 +168,11 @@ export function AuthProvider({ children }) {
     return commitAuthentication(data, "Invalid response from server");
   };
 
+  const reactivateAccount = async (credentials) => {
+    const { data } = await api.post("/auth/reactivate", credentials);
+    return commitAuthentication(data, "Could not reactivate account");
+  };
+
   const googleLogin = async (credential) => {
     const { data } = await api.post("/auth/google", { credential });
     return commitAuthentication(data, "Google authentication failed");
@@ -235,6 +249,7 @@ export function AuthProvider({ children }) {
         setUser,
         loading,
         login,
+        reactivateAccount,
         googleLogin,
         appleLogin,
         initiateRegistration,

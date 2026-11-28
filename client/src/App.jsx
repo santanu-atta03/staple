@@ -3,6 +3,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./components/AppLayout";
 import LoginPage from "./modules/auth/LoginPage";
 import RegisterPage from "./modules/auth/RegisterPage";
+import AuthPage from "./modules/auth/AuthPage";
 import PostDetailsPage from "./modules/posts/PostDetailsPage";
 import ProfilePage from "./modules/users/ProfilePage";
 import NotificationPage from "./modules/notifications/NotificationPage";
@@ -34,6 +35,14 @@ export default function App() {
       <Route
         path="/register"
         element={<Navigate to="/signup" replace />}
+      />
+      <Route
+        path="/forgot-password"
+        element={user ? <Navigate to="/" replace /> : <AuthPage initialMode="forgot" />}
+      />
+      <Route
+        path="/reset-password"
+        element={user ? <Navigate to="/" replace /> : <AuthPage initialMode="reset" />}
       />
 
       {/* Authenticated Shell */}

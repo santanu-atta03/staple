@@ -91,4 +91,11 @@ router.post(
   controller.logout
 );
 
+router.get("/sessions", authenticate, controller.getSessions);
+router.delete("/sessions/:sessionId", authenticate, controller.revokeSession);
+router.post("/sessions/logout-all", authenticate, controller.logoutAllDevices);
+router.post("/deactivate", authenticate, controller.deactivateAccount);
+router.post("/reactivate", authLimiter, controller.reactivateAccount);
+router.delete("/account", authenticate, controller.deleteAccount);
+
 module.exports = router;

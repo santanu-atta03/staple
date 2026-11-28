@@ -30,6 +30,21 @@ const postSchema = new mongoose.Schema(
       default: [],
     },
 
+    taggedUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        index: true,
+      },
+    ],
+
+    mentions: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
     location: {
       type: String,
       maxlength: 120,
@@ -52,6 +67,23 @@ const postSchema = new mongoose.Schema(
       type: String,
       enum: ["public", "followers", "private"],
       default: "public",
+    },
+
+    isDraft: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    isArchived: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    commentsDisabled: {
+      type: Boolean,
+      default: false,
     },
 
     isDeleted: {

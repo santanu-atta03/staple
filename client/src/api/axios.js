@@ -118,14 +118,15 @@ api.interceptors.response.use(
       return api(originalRequest);
     } catch (refreshError) {
       processQueue(refreshError, null);
-      if (
-        refreshError.response?.status === 401 ||
-        refreshError.response?.status === 403
-      ) {
+      const status = refreshError?.response?.status;
+      const noTokenReturned = refreshError?.message === "No access token returned from refresh";
+      if (status === 401 || status === 403 || noTokenReturned) {
         if (requestGeneration === authGeneration) {
           accessToken = null;
           if (typeof window !== "undefined") {
             localStorage.removeItem("staple_access_token");
+            localStorage.removeItem("staple_user");
+            window.dispatchEvent(new Event("staple:session_expired"));
           }
         }
       }

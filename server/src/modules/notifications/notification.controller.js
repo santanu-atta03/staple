@@ -194,8 +194,38 @@ const respondFriendRequest = async (req, res, next) => {
 
 const getSidebar = async (req, res, next) => {
   try {
-    const userId = req.user?.id || req.user?._id || "default_user";
+    const userId = (req.user?.id || req.user?._id || "").toString();
     const sidebar = store.getNotificationSidebar(userId);
+
+    if (mongoose.connection.readyState === 1 && mongoose.isValidObjectId(userId)) {
+      try {
+        const [users, followingDocs, followerDocs] = await Promise.all([
+          User.find({ _id: { $ne: userId }, isActive: true, emailVerified: true })
+            .select("_id username fullName avatar")
+            .limit(10)
+            .lean(),
+          Follow.find({ followerId: userId }).select("followingId").lean(),
+          Follow.find({ followingId: userId }).select("followerId").lean(),
+        ]);
+        const followingIds = new Set(followingDocs.map((d) => d.followingId.toString()));
+        const followerIds = new Set(followerDocs.map((d) => d.followerId.toString()));
+        sidebar.suggestedFriends = users.map((u) => {
+          const uid = u._id.toString();
+          const isFollowing = followingIds.has(uid);
+          return {
+            id: uid,
+            name: u.fullName || u.username,
+            username: u.username,
+            subtitle: `@${u.username}`,
+            avatar: u.avatar || "/default-avatar.svg",
+            isFollowing,
+            followsYou: followerIds.has(uid),
+            status: isFollowing ? "friends" : "idle",
+          };
+        });
+      } catch {}
+    }
+
     res.json({ success: true, ...sidebar });
   } catch (err) {
     next(err);

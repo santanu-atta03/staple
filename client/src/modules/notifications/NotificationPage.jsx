@@ -33,7 +33,7 @@ import {
   toggleSuggestedFriend,
 } from "./notification.api";
 import DeleteNotificationModal from "./DeleteNotificationModal";
-import { toggleFollowUser } from "../users/profile.api";
+import { toggleFollowUser, fetchFollowRequests, respondFollowRequest } from "../users/profile.api";
 import { useSocket } from "../../context/SocketContext";
 
 export default function NotificationPage() {
@@ -44,6 +44,7 @@ export default function NotificationPage() {
 
   // Dynamic notifications list from backend DB
   const [items, setItems] = useState([]);
+  const [followRequests, setFollowRequests] = useState([]);
 
   // Dynamic right sidebar widgets from backend DB
   const [sidebarData, setSidebarData] = useState({
@@ -80,6 +81,7 @@ export default function NotificationPage() {
         setItems(data.notifications || []);
         if (typeof data.unreadCount === "number") {
           setUnreadCount(data.unreadCount);
+          setSocketUnreadCount(data.unreadCount);
         }
       }
     } catch (err) {
@@ -112,6 +114,9 @@ export default function NotificationPage() {
 
   useEffect(() => {
     loadSidebar();
+    fetchFollowRequests()
+      .then((reqs) => setFollowRequests(Array.isArray(reqs) ? reqs : []))
+      .catch(() => {});
     fetchUnreadCount()
       .then((c) => setUnreadCount(c))
       .catch(() => {});
@@ -383,6 +388,68 @@ export default function NotificationPage() {
             })}
           </div>
 
+          {/* Pending Private Account Follow Requests */}
+          {followRequests.length > 0 && (
+            <div className="rounded-2xl border border-[#ece8de]/70 bg-white p-4 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#71717a]">
+                  Pending Follow Requests ({followRequests.length})
+                </span>
+              </div>
+              <div className="space-y-2.5">
+                {followRequests.map((req) => (
+                  <div key={req.id} className="flex items-center justify-between gap-3">
+                    <Link to={`/u/${req.username}`} className="flex items-center gap-3 min-w-0">
+                      <img
+                        src={req.avatar || "/default-avatar.svg"}
+                        alt={req.name}
+                        className="h-9 w-9 rounded-full object-cover ring-1 ring-black/5"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-[13.5px] font-semibold text-[#1b1c19] truncate hover:underline">
+                          {req.name}
+                        </p>
+                        <p className="text-xs text-[#71717a] truncate">@{req.username}</p>
+                      </div>
+                    </Link>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await respondFollowRequest(req.id, "accept");
+                            setFollowRequests((prev) => prev.filter((r) => r.id !== req.id));
+                            showToast(`Accepted @${req.username}`);
+                          } catch {
+                            showToast("Could not accept request");
+                          }
+                        }}
+                        className="rounded-full bg-black px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-neutral-800 transition cursor-pointer"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await respondFollowRequest(req.id, "reject");
+                            setFollowRequests((prev) => prev.filter((r) => r.id !== req.id));
+                            showToast("Request declined");
+                          } catch {
+                            showToast("Could not decline request");
+                          }
+                        }}
+                        className="rounded-full bg-[#f0eee9] px-3 py-1.5 text-xs font-medium text-[#47464b] hover:bg-[#e4e2dd] transition cursor-pointer"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Loading State */}
           {isLoading && (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-[#ece8de]/60 bg-white p-12 text-center shadow-xs">
@@ -403,7 +470,7 @@ export default function NotificationPage() {
                 No notifications in this tab
               </h3>
               <p className="mt-1 text-[13px] text-[#71717a] max-w-xs leading-relaxed">
-                When someone likes your photos, comments on your reels, or sends you a friend request, you'll see them here.
+                When someone likes your photos, comments on your reels, or follows you, you'll see them here.
               </p>
             </div>
           )}
@@ -604,7 +671,7 @@ export default function NotificationPage() {
                             )}
 
                             {/* Card: Follow Notification */}
-                            {item.type === "follow" && (
+                            {(item.type === "follow" || item.type === "friends") && (
                               <div>
                                 <p className="text-[13.5px] sm:text-[14.5px] leading-snug text-[#1b1c19]">
                                   <Link
@@ -635,8 +702,8 @@ export default function NotificationPage() {
                                         );
                                         showToast(
                                           res.isFollowing
-                                            ? `Following @${item.user}`
-                                            : `Unfollowed @${item.user}`
+                                            ? `Following ${item.titlePrefix || item.userName || item.user}`
+                                            : `Unfollowed ${item.titlePrefix || item.userName || item.user}`
                                         );
                                       } catch {
                                         showToast("Could not update follow status");
@@ -657,60 +724,6 @@ export default function NotificationPage() {
                                   >
                                     View Profile
                                   </Link>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Card: Friend Request */}
-                            {item.type === "friends" && (
-                              <div>
-                                <p className="text-[13.5px] sm:text-[14.5px] leading-snug text-[#1b1c19]">
-                                  <Link
-                                    to={`/u/${item.user}`}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="font-semibold hover:underline"
-                                  >
-                                    {item.titlePrefix || item.userName}
-                                  </Link>{" "}
-                                  sent you a friend request.
-                                </p>
-                                <span className="block mt-0.5 text-xs text-[#93939f]">
-                                  {item.subtext}
-                                </span>
-
-                                {/* Action Buttons: Confirm / Delete */}
-                                <div className="mt-2.5 flex items-center gap-2">
-                                  {(!item.friendStatus || item.friendStatus === "pending") && (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => handleFeedFriendAction(item.id, "confirmed", e)}
-                                        className="rounded-full bg-black px-4 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-neutral-800 active:scale-95 transition"
-                                      >
-                                        Confirm
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => handleFeedFriendAction(item.id, "deleted", e)}
-                                        className="rounded-full bg-[#f0eee9] px-3.5 py-1.5 text-xs font-medium text-[#47464b] hover:bg-[#e4e2dd] active:scale-95 transition"
-                                      >
-                                        Delete
-                                      </button>
-                                    </>
-                                  )}
-
-                                  {item.friendStatus === "confirmed" && (
-                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#b8ede0] px-3.5 py-1 text-xs font-semibold text-[#00201b]">
-                                      <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-                                      <span>Friends</span>
-                                    </span>
-                                  )}
-
-                                  {item.friendStatus === "deleted" && (
-                                    <span className="text-xs text-[#93939f] italic">
-                                      Request removed
-                                    </span>
-                                  )}
                                 </div>
                               </div>
                             )}
@@ -877,131 +890,7 @@ export default function NotificationPage() {
         {/* RIGHT SIDEBAR COLUMN: Widgets (Col span: 4) - FIXED & STICKY, NO SCROLL   */}
         {/* ========================================================================= */}
         <aside className="hidden lg:flex lg:col-span-4 flex-col gap-5 sticky top-0 h-screen overflow-hidden pt-2 sm:pt-4 pb-6">
-          {/* Widget 1: Follow Requests */}
-          <div className="rounded-3xl bg-white p-5 shadow-xs border border-[#ece8de]/70 flex flex-col gap-3.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <span className="text-[#1863dc]">
-                  <UserPlus className="h-5 w-5 stroke-[2.2]" />
-                </span>
-                <h2 className="text-[16px] font-bold text-[#1b1c19]">
-                  Follow Requests
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => showToast("All follow requests synced")}
-                className="font-mono text-xs font-semibold text-[#1863dc] hover:underline"
-              >
-                See All
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {(sidebarData.friendRequests || []).map((req) => (
-                <div key={req.id} className="flex items-center justify-between gap-3 pt-1">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <img
-                      src={req.avatar}
-                      alt={req.name}
-                      onError={(e) => {
-                        e.target.src = "/notifications/marcus.png";
-                      }}
-                      className="h-10 w-10 rounded-full object-cover shadow-2xs ring-1 ring-black/5"
-                    />
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-[13.5px] font-semibold text-[#1b1c19] truncate">
-                        {req.name}
-                      </span>
-                      <span className="text-xs text-[#93939f] truncate">
-                        {req.mutualFriends}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {(!req.status || req.status === "pending") && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleSidebarFriendAction(req.id, "confirmed")}
-                          className="rounded-full bg-black px-3.5 py-1 text-xs font-semibold text-white shadow-2xs hover:bg-neutral-800 active:scale-95 transition"
-                        >
-                          Confirm
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSidebarFriendAction(req.id, "deleted")}
-                          className="rounded-full bg-[#f0eee9] px-2.5 py-1 text-xs font-medium text-[#47464b] hover:bg-[#e4e2dd] active:scale-95 transition"
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
-
-                    {req.status === "confirmed" && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-[#b8ede0] px-3 py-1 text-xs font-semibold text-[#00201b]">
-                        <Check className="h-3 w-3 stroke-[3]" />
-                        <span>Friends</span>
-                      </span>
-                    )}
-
-                    {req.status === "deleted" && (
-                      <span className="text-xs text-[#93939f] italic">Removed</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Widget 2: Birthdays */}
-          <div className="relative overflow-hidden rounded-3xl bg-white p-5 shadow-xs border border-[#ece8de]/70 flex flex-col gap-3">
-            <div className="flex items-center gap-2.5">
-              <span className="text-[#da5c40]">
-                <Cake className="h-5 w-5 stroke-[2.2]" />
-              </span>
-              <h2 className="text-[16px] font-bold text-[#1b1c19]">Birthdays</h2>
-            </div>
-
-            {(sidebarData.birthdays || []).map((bday) => (
-              <div key={bday.id} className="flex items-center gap-3 pt-1">
-                <div className="relative shrink-0">
-                  <img
-                    src={bday.avatar}
-                    alt={bday.name}
-                    onError={(e) => {
-                      e.target.src = "/notifications/lucas.png";
-                    }}
-                    className="h-10 w-10 rounded-full object-cover ring-2 ring-[#ffad9b]/60 shadow-2xs"
-                  />
-                </div>
-
-                <div className="flex flex-col min-w-0 flex-1">
-                  <p className="text-[13px] leading-snug text-[#1b1c19]">
-                    Today is <span className="font-semibold">{bday.name}</span>'s birthday! 🎂
-                  </p>
-                  <span className="text-xs text-[#93939f]">
-                    {bday.subtext}
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleToggleBirthdayWish(bday.id)}
-                  className={`rounded-full px-3.5 py-1 text-xs font-semibold transition active:scale-90 shrink-0 ${
-                    bday.isWished
-                      ? "bg-[#ffad9b] text-[#3d0600]"
-                      : "bg-[#f0eee9] text-[#1b1c19] hover:bg-black hover:text-white"
-                  }`}
-                >
-                  {bday.isWished ? "Wished! 🎉" : "Wish"}
-                </button>
-              </div>
-            ))}
-          </div>
-
-          {/* Widget 3: Suggested Friends */}
+          {/* People You May Know (Follow System) */}
           <div className="rounded-3xl bg-white p-5 shadow-xs border border-[#ece8de]/70 flex flex-col gap-3.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1009,7 +898,7 @@ export default function NotificationPage() {
                   <Users className="h-5 w-5 stroke-[2.2]" />
                 </span>
                 <h2 className="text-[16px] font-bold text-[#1b1c19]">
-                  Suggested Friends
+                  People You May Know
                 </h2>
               </div>
               <Link
@@ -1021,40 +910,75 @@ export default function NotificationPage() {
             </div>
 
             <div className="flex flex-col gap-3 pt-1">
-              {(sidebarData.suggestedFriends || []).map((person) => (
-                <div key={person.id} className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <img
-                      src={person.avatar}
-                      alt={person.name}
-                      onError={(e) => {
-                        e.target.src = "/notifications/marcus.png";
-                      }}
-                      className="h-9 w-9 rounded-full object-cover shadow-2xs ring-1 ring-black/5"
-                    />
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-[13.5px] font-semibold text-[#1b1c19] truncate">
-                        {person.name}
-                      </span>
-                      <span className="text-xs text-[#93939f] truncate">
-                        {person.subtitle}
-                      </span>
-                    </div>
-                  </div>
+              {(sidebarData.suggestedFriends || []).length === 0 ? (
+                <p className="text-xs text-[#93939f] py-2">No suggestions right now.</p>
+              ) : (
+                (sidebarData.suggestedFriends || []).map((person) => {
+                  const targetHandle = person.username || (person.subtitle || "").replace(/^@/, "");
+                  const isFollowing = Boolean(person.isFollowing || person.status === "friends");
+                  return (
+                    <div key={person.id} className="flex items-center justify-between gap-3">
+                      <Link
+                        to={`/u/${targetHandle}`}
+                        className="flex items-center gap-3 min-w-0 flex-1"
+                      >
+                        <img
+                          src={person.avatar || "/default-avatar.svg"}
+                          alt={person.name}
+                          onError={(e) => {
+                            e.currentTarget.src = "/default-avatar.svg";
+                          }}
+                          className="h-9 w-9 rounded-full object-cover shadow-2xs ring-1 ring-black/5"
+                        />
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[13.5px] font-semibold text-[#1b1c19] truncate hover:underline">
+                            {person.name}
+                          </span>
+                          <span className="text-xs text-[#93939f] truncate">
+                            {person.subtitle}
+                          </span>
+                        </div>
+                      </Link>
 
-                  <button
-                    type="button"
-                    onClick={() => handleToggleSuggestedFriend(person.id)}
-                    className={`rounded-full px-3.5 py-1 text-xs font-semibold transition active:scale-95 shrink-0 ${
-                      person.status === "added"
-                        ? "bg-[#b8ede0] text-[#00201b]"
-                        : "bg-[#f0eee9] text-[#1b1c19] hover:bg-black hover:text-white"
-                    }`}
-                  >
-                    {person.status === "added" ? "Requested" : "Add Friend"}
-                  </button>
-                </div>
-              ))}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!targetHandle) return;
+                          try {
+                            const res = await toggleFollowUser(targetHandle);
+                            setSidebarData((prev) => ({
+                              ...prev,
+                              suggestedFriends: (prev.suggestedFriends || []).map((p) =>
+                                p.id === person.id
+                                  ? {
+                                      ...p,
+                                      isFollowing: res.isFollowing,
+                                      status: res.isFollowing ? "friends" : "idle",
+                                    }
+                                  : p
+                              ),
+                            }));
+                            showToast(
+                              res.isFollowing
+                                ? `Following @${targetHandle}`
+                                : `Unfollowed @${targetHandle}`
+                            );
+                          } catch {
+                            showToast("Could not update follow status");
+                          }
+                        }}
+                        className={`rounded-full px-3.5 py-1 text-xs font-semibold transition active:scale-95 shrink-0 cursor-pointer ${
+                          isFollowing
+                            ? "bg-[#f0eee9] text-[#1b1c19] hover:bg-[#e4e2dd]"
+                            : "bg-black text-white hover:bg-neutral-800"
+                        }`}
+                      >
+                        {isFollowing ? "Following" : person.followsYou ? "Follow Back" : "Follow"}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
             {/* Discover More People Footer */}

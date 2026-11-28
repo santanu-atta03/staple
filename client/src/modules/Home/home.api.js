@@ -1,12 +1,24 @@
 import api from "../../api/axios";
 
-export const fetchFeed = async (tab = "for-you", query = "") => {
-  const { data } = await api.get(`/feed?tab=${tab}&q=${encodeURIComponent(query)}`);
-  return data.posts || [];
+export const fetchFeedPage = async (tab = "for-you", query = "", { page = 1, limit = 12, signal } = {}) => {
+  const { data } = await api.get(
+    `/feed?tab=${encodeURIComponent(tab)}&q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`,
+    { signal }
+  );
+  return {
+    posts: data.posts || [],
+    hasMore: Boolean(data.hasMore),
+    page: data.page || page,
+  };
 };
 
-export const createNewPost = async ({ content, media = [], tags = [], location = "" }) => {
-  const { data } = await api.post("/posts", { content, media, tags, location });
+export const fetchFeed = async (tab = "for-you", query = "") => {
+  const { posts } = await fetchFeedPage(tab, query);
+  return posts;
+};
+
+export const createNewPost = async ({ content, media = [], tags = [], location = "", visibility = "public" }) => {
+  const { data } = await api.post("/posts", { content, media, tags, location, visibility });
   return data.post;
 };
 

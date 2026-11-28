@@ -1,5 +1,6 @@
 const redis = require("../../config/redis");
 const Like = require("./like.model");
+const Post = require("../posts/post.model");
 const { socialQueue } = require("../../queues/social.queue");
 
 const togglePostLike = async ({ userId, postId, authorId }) => {
@@ -22,6 +23,8 @@ const togglePostLike = async ({ userId, postId, authorId }) => {
 
   if (alreadyLiked) {
     await redis.srem(likeSetKey, userId.toString());
+    await Like.deleteOne({ userId, postId });
+    await Post.updateOne({ _id: postId }, { $inc: { likesCount: -1 } });
     await socialQueue.add("SYNC_LIKE", {
       userId: userId.toString(),
       postId: postId.toString(),
@@ -30,6 +33,12 @@ const togglePostLike = async ({ userId, postId, authorId }) => {
     });
   } else {
     await redis.sadd(likeSetKey, userId.toString());
+    await Like.updateOne(
+      { userId, postId },
+      { $setOnInsert: { userId, postId } },
+      { upsert: true }
+    );
+    await Post.updateOne({ _id: postId }, { $inc: { likesCount: 1 } });
     await socialQueue.add("SYNC_LIKE", {
       userId: userId.toString(),
       postId: postId.toString(),

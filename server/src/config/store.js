@@ -576,21 +576,36 @@ class PersistentStore {
   // Sidebar
   getSidebarData(userId) {
     const uid = userId?.toString();
+    const viewer = this.findUser(uid);
+    const viewerUsername = (viewer?.username || "").toLowerCase();
     const following = new Set(this.data.userFollowing?.[uid] || []);
     return {
-      people: this.data.people.map((person) => ({
-        ...person,
-        isFollowing: following.has(person.username || person.id),
-      })),
+      people: (this.data.people || [])
+        .filter((person) => {
+          const pid = (person.id || person._id || "").toString();
+          const puname = (person.username || "").toLowerCase();
+          return pid !== uid && (!viewerUsername || puname !== viewerUsername);
+        })
+        .map((person) => ({
+          ...person,
+          isFollowing: following.has(person.username || person.id),
+        })),
       trending: this.getTrending(),
       groups: this.getGroups(uid),
-      currentUser: this.findUser(uid),
+      currentUser: viewer,
     };
   }
 
   toggleFollow(personId, userId) {
     const uid = userId?.toString();
-    if (!uid) return null;
+    if (!uid || !personId) return null;
+    const viewer = this.findUser(uid);
+    if (
+      uid === personId.toString() ||
+      (viewer?.username && viewer.username.toLowerCase() === personId.toString().toLowerCase())
+    ) {
+      return null;
+    }
     let person = (this.data.people || []).find((p) => p.id === personId || p.username === personId);
     if (!person) {
       const u = this.findUser(personId);
@@ -620,12 +635,10 @@ class PersistentStore {
       this.data.userFollowing[uid].includes(handle) ||
       this.data.userFollowing[uid].includes(targetId);
 
+    const canonicalKey = targetId || handle;
     if (!isFollowing) {
-      if (!this.data.userFollowing[uid].includes(handle)) {
-        this.data.userFollowing[uid].push(handle);
-      }
-      if (targetId && targetId !== handle && !this.data.userFollowing[uid].includes(targetId)) {
-        this.data.userFollowing[uid].push(targetId);
+      if (!this.data.userFollowing[uid].includes(canonicalKey)) {
+        this.data.userFollowing[uid].push(canonicalKey);
       }
     } else {
       this.data.userFollowing[uid] = this.data.userFollowing[uid].filter(
@@ -636,7 +649,13 @@ class PersistentStore {
     const user = this.findUser(uid);
     if (user) {
       // Calculate distinct following count
-      user.followingCount = new Set(this.data.userFollowing[uid]).size;
+      const uniqueFollowed = new Set(
+        this.data.userFollowing[uid].map((entry) => {
+          const resolved = this.findUser(entry);
+          return resolved ? (resolved._id || resolved.id).toString() : entry;
+        })
+      );
+      user.followingCount = uniqueFollowed.size;
     }
 
     // Calculate actual followers count for target
@@ -734,7 +753,12 @@ class PersistentStore {
         cover: targetUser.cover || "",
         postsCount: posts.length,
         followersCount: calculatedFollowers,
-        followingCount: new Set(followingList).size,
+        followingCount: new Set(
+          followingList.map((entry) => {
+            const resolved = this.findUser(entry);
+            return resolved ? (resolved._id || resolved.id).toString() : entry;
+          })
+        ).size,
         isSelf: isSelf || (viewerUserId && (viewerUserId === targetUser._id || viewerUserId === targetUser.id)),
         isFollowing,
       };
@@ -1228,17 +1252,35 @@ class PersistentStore {
       }
     }
 
-    const followingSet = new Set(this.data.userFollowing?.[uid] || []);
-    list = list.map((n) =>
-      n.type === "follow"
-        ? {
-            ...n,
-            isFollowingBack: Boolean(
-              followingSet.has(n.user) || (n.senderId && followingSet.has(n.senderId))
-            ),
-          }
-        : n
+    const followingSet = new Set(
+      (this.data.userFollowing?.[uid] || []).map((entry) => {
+        const resolved = this.findUser(entry);
+        return resolved ? (resolved._id || resolved.id).toString() : entry;
+      })
     );
+    list = list.map((n) => {
+      const sender = this.findUser(n.senderId || n.user);
+      const displayName = sender?.fullName || sender?.name || n.titlePrefix || n.userName || n.user;
+      const senderIdStr = sender ? (sender._id || sender.id).toString() : n.senderId;
+      if (n.type === "follow" || n.type === "friends") {
+        return {
+          ...n,
+          titlePrefix: displayName,
+          userName: displayName,
+          avatar: sender?.avatar || n.avatar || "/default-avatar.svg",
+          isFollowingBack: Boolean(
+            followingSet.has(n.user) ||
+              (senderIdStr && followingSet.has(senderIdStr))
+          ),
+        };
+      }
+      return {
+        ...n,
+        titlePrefix: displayName,
+        userName: displayName,
+        avatar: sender?.avatar || n.avatar || "/default-avatar.svg",
+      };
+    });
 
     const unreadCount = this.data.notifications.filter((n) => n.recipientId === uid && !n.isRead).length;
 
@@ -1384,42 +1426,36 @@ class PersistentStore {
 
   getNotificationSidebar(userId) {
     const uid = userId ? userId.toString() : (this.data.currentUser?._id || "default_user");
+    const viewer = this.findUser(uid);
+    const viewerUsername = (viewer?.username || "").toLowerCase();
+    const followingSet = new Set(this.data.userFollowing?.[uid] || []);
+
     if (!this.data.userNotificationSidebars) this.data.userNotificationSidebars = {};
-    if (!this.data.userNotificationSidebars[uid] || !this.data.userNotificationSidebars[uid].suggestedFriends?.length) {
-      const otherUsers = (this.data.users || [])
-        .filter((u) => (u._id || u.id)?.toString() !== uid)
-        .slice(0, 10)
-        .map((u) => ({
-          id: (u._id || u.id).toString(),
+    const otherUsers = (this.data.users || [])
+      .filter((u) => {
+        const uId = (u._id || u.id)?.toString();
+        const uName = (u.username || "").toLowerCase();
+        return uId !== uid && (!viewerUsername || uName !== viewerUsername);
+      })
+      .slice(0, 10)
+      .map((u) => {
+        const uId = (u._id || u.id).toString();
+        return {
+          id: uId,
           name: u.fullName || u.name || u.username,
+          username: u.username,
           subtitle: `@${u.username}`,
           avatar: u.avatar || "/default-avatar.svg",
-          status: "idle",
-        }));
+          isFollowing: followingSet.has(u.username) || followingSet.has(uId),
+          status: followingSet.has(u.username) || followingSet.has(uId) ? "friends" : "idle",
+        };
+      });
 
-      const defaultCuratedSuggestions = [
-
-      ];
-
-      const merged = [
-        ...otherUsers,
-        ...defaultCuratedSuggestions.filter((d) => !otherUsers.some((o) => o.id === d.id)),
-      ];
-
-      this.data.userNotificationSidebars[uid] = {
-        friendRequests: this.data.userNotificationSidebars[uid]?.friendRequests?.length
-          ? this.data.userNotificationSidebars[uid].friendRequests
-          : [
-            ],
-        birthdays: this.data.userNotificationSidebars[uid]?.birthdays?.length
-          ? this.data.userNotificationSidebars[uid].birthdays
-          : [
-
-            ],
-        suggestedFriends: merged,
-      };
-      this.saveData();
-    }
+    this.data.userNotificationSidebars[uid] = {
+      friendRequests: [],
+      birthdays: this.data.userNotificationSidebars[uid]?.birthdays || [],
+      suggestedFriends: otherUsers,
+    };
     return this.data.userNotificationSidebars[uid];
   }
 
@@ -1840,6 +1876,12 @@ class PersistentStore {
       list = list.filter((c) => c.unread > 0);
     }
 
+    list.sort((a, b) => {
+      const lastA = a.messages?.[a.messages.length - 1]?.createdAt || a.updatedAt || a.createdAt || 0;
+      const lastB = b.messages?.[b.messages.length - 1]?.createdAt || b.updatedAt || b.createdAt || 0;
+      return new Date(lastB) - new Date(lastA);
+    });
+
     return list;
   }
 
@@ -1898,6 +1940,16 @@ class PersistentStore {
     conv.messages.push(newMsg);
     conv.lastMessage = text || (type === "image" ? "Sent an attachment" : "");
     conv.time = "Just now";
+    conv.updatedAt = new Date().toISOString();
+
+    if (!conv.unreadByUser) conv.unreadByUser = {};
+    (conv.participants || []).forEach((p) => {
+      if (p.toString() !== currentUid) {
+        conv.unreadByUser[p.toString()] = (conv.unreadByUser[p.toString()] || 0) + 1;
+      } else {
+        conv.unreadByUser[p.toString()] = 0;
+      }
+    });
 
     this.saveData();
     return { conversation: conv, message: newMsg };

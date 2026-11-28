@@ -6,10 +6,13 @@ export default function FollowersModal({
   isOpen,
   initialTab = "followers",
   username,
+  isSelf = false,
   followers = [],
   following = [],
+  isLoading = false,
   onClose,
   onToggleFollow,
+  onRemoveFollower,
 }) {
   const navigate = useNavigate();
   const [tab, setTab] = useState(initialTab);
@@ -104,7 +107,11 @@ export default function FollowersModal({
 
         {/* Users List */}
         <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pr-0.5 min-h-[220px]">
-          {filteredList.length === 0 ? (
+          {isLoading ? (
+            <div className="py-10 text-center text-[13px] text-[#71717a]">
+              Loading {tab}...
+            </div>
+          ) : filteredList.length === 0 ? (
             <div className="py-10 text-center text-[13px] text-[#71717a]">
               No {tab} found.
             </div>
@@ -151,30 +158,46 @@ export default function FollowersModal({
                   </div>
 
                   {!u.isSelf && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggle(u);
-                      }}
-                      className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition active:scale-95 cursor-pointer shrink-0 ${
-                        isFollowing
-                          ? "bg-[#edeae3] text-neutral-800 hover:bg-[#e2ded5]"
-                          : "bg-black text-white hover:bg-neutral-800"
-                      }`}
-                    >
-                      {isFollowing ? (
-                        <>
-                          <Check className="h-3 w-3" />
-                          <span>Following</span>
-                        </>
-                      ) : (
-                        <>
-                          <UserPlus className="h-3 w-3" />
-                          <span>Follow</span>
-                        </>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {isSelf && tab === "followers" && onRemoveFollower && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Remove @${u.username} from your followers?`)) {
+                              onRemoveFollower(u.username);
+                            }
+                          }}
+                          className="rounded-full bg-[#f0eee9] px-3 py-1.5 text-[11.5px] font-medium text-[#dc2626] hover:bg-red-50 transition cursor-pointer"
+                        >
+                          Remove
+                        </button>
                       )}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggle(u);
+                        }}
+                        className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition active:scale-95 cursor-pointer shrink-0 ${
+                          isFollowing
+                            ? "bg-[#edeae3] text-neutral-800 hover:bg-[#e2ded5]"
+                            : "bg-black text-white hover:bg-neutral-800"
+                        }`}
+                      >
+                        {isFollowing ? (
+                          <>
+                            <Check className="h-3 w-3" />
+                            <span>Following</span>
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="h-3 w-3" />
+                            <span>Follow</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   )}
                 </div>
               );

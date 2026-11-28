@@ -47,3 +47,42 @@ export const toggleFollowUser = async (username) => {
   const { data } = await api.post(`/users/${encodeURIComponent(username)}/follow`);
   return data;
 };
+
+export const checkUsernameAvailable = async (username) => {
+  const { data } = await api.get(`/auth/check-username?username=${encodeURIComponent(username)}`);
+  return Boolean(data.available);
+};
+
+export const uploadProfileMedia = async (file) => {
+  const formData = new FormData();
+  formData.append("files", file);
+  const { data } = await api.post("/uploads", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data.media?.[0]?.url || "";
+};
+
+export const fetchFollowRequests = async () => {
+  const { data } = await api.get("/users/me/follow-requests");
+  return data.requests || [];
+};
+
+export const respondFollowRequest = async (requestId, action) => {
+  const { data } = await api.post(`/users/me/follow-requests/${requestId}/respond`, { action });
+  return data;
+};
+
+export const removeFollower = async (followerUsername) => {
+  const { data } = await api.delete(`/users/me/followers/${encodeURIComponent(followerUsername)}`);
+  return data;
+};
+
+export const toggleBlockUser = async (username) => {
+  const { data } = await api.post(`/users/${encodeURIComponent(username)}/block`);
+  return data;
+};
+
+export const reportUser = async (username, reason) => {
+  const { data } = await api.post(`/users/${encodeURIComponent(username)}/report`, { reason });
+  return data;
+};

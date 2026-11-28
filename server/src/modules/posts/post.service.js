@@ -11,6 +11,18 @@ const canViewPost = async (post, viewerId) => {
   const authorId = post.authorId?._id || post.authorId;
   const isOwner = viewerId && authorId.toString() === viewerId.toString();
   if (isOwner) return true;
+  if (post.isDraft || post.isArchived) return false;
+
+  const Block = require("../users/block.model");
+  if (viewerId) {
+    const blocked = await Block.exists({
+      $or: [
+        { blockerId: viewerId, blockedId: authorId },
+        { blockerId: authorId, blockedId: viewerId },
+      ],
+    });
+    if (blocked) return false;
+  }
 
   const author = post.authorId?.isPrivate !== undefined
     ? post.authorId
@@ -23,28 +35,83 @@ const canViewPost = async (post, viewerId) => {
   return post.visibility === "followers" && Boolean(followsAuthor);
 };
 
-const createPost = async ({ authorId, content, media = [], tags = [], location = "" }) => {
+const extractHashtagsAndMentions = async (content = "", explicitTags = [], taggedHandles = [], authorId = null) => {
+  const hashtagMatches = String(content).match(/#[a-zA-Z0-9_]+/g) || [];
+  const mergedTags = Array.from(
+    new Set([
+      ...(Array.isArray(explicitTags) ? explicitTags : []),
+      ...hashtagMatches,
+    ].map((t) => (t.startsWith("#") ? t.toLowerCase() : `#${t.toLowerCase()}`)))
+  );
+
+  const mentionMatches = (String(content).match(/@[a-zA-Z0-9_]+/g) || []).map((m) =>
+    m.slice(1).toLowerCase()
+  );
+  const tagHandles = (Array.isArray(taggedHandles) ? taggedHandles : []).map((h) =>
+    String(h).replace(/^@/, "").toLowerCase().trim()
+  ).filter(Boolean);
+
+  const allHandles = Array.from(new Set([...mentionMatches, ...tagHandles]));
+  let mentionIds = [];
+  let taggedIds = [];
+  if (allHandles.length > 0) {
+    const matchedUsers = await User.find({
+      username: { $in: allHandles },
+      isActive: true,
+      deletedAt: null,
+    }).select("_id username").lean();
+    const byUsername = new Map(matchedUsers.map((u) => [u.username.toLowerCase(), u._id]));
+    mentionIds = mentionMatches.map((h) => byUsername.get(h)).filter(Boolean);
+    taggedIds = tagHandles.map((h) => byUsername.get(h)).filter(Boolean);
+  }
+  return { mergedTags, mentionIds, taggedIds };
+};
+
+const createPost = async ({
+  authorId,
+  content = "",
+  media = [],
+  tags = [],
+  taggedUsers = [],
+  location = "",
+  visibility = "public",
+  isDraft = false,
+  commentsDisabled = false,
+}) => {
+  const { mergedTags, mentionIds, taggedIds } = await extractHashtagsAndMentions(
+    content,
+    tags,
+    taggedUsers,
+    authorId
+  );
+
   const post = await Post.create({
     authorId,
     content,
     media,
-    tags,
+    tags: mergedTags,
+    taggedUsers: taggedIds,
+    mentions: mentionIds,
     location,
+    visibility: ["public", "followers", "private"].includes(visibility) ? visibility : "public",
+    isDraft: Boolean(isDraft),
+    commentsDisabled: Boolean(commentsDisabled),
   });
 
-  const populatedPost = await post.populate("authorId", "username name avatar");
+  const populatedPost = await post.populate("authorId", "username fullName avatar");
 
-  // Pull follower IDs from Redis Set (or warm from MongoDB) + include author's own feed
-  const followerIds = await followService.getFollowerIds(authorId);
-  const targets = Array.from(new Set([authorId.toString(), ...followerIds]));
+  if (!post.isDraft) {
+    const followerIds = await followService.getFollowerIds(authorId);
+    const targets = Array.from(new Set([authorId.toString(), ...followerIds]));
 
-  await socialQueue.add("FANOUT_POST", {
-    postId: post._id.toString(),
-    authorId: authorId.toString(),
-    followerIds: targets,
-  });
+    await socialQueue.add("FANOUT_POST", {
+      postId: post._id.toString(),
+      authorId: authorId.toString(),
+      followerIds: targets,
+    });
+    await redis.set(`post:${post._id}`, JSON.stringify(populatedPost), "EX", 600);
+  }
 
-  await redis.set(`post:${post._id}`, JSON.stringify(populatedPost), "EX", 600);
   return populatedPost;
 };
 
@@ -135,6 +202,8 @@ const getPostsByUser = async (userId, page = 1, limit = 20, viewerId = null) => 
   }
   return Post.find({
     authorId: userId,
+    isDraft: { $ne: true },
+    isArchived: { $ne: true },
     $and: [
       { $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }] },
       { $or: visibility },
@@ -143,8 +212,58 @@ const getPostsByUser = async (userId, page = 1, limit = 20, viewerId = null) => 
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
-    .populate("authorId", "username name avatar")
+    .populate("authorId", "username fullName avatar")
     .lean();
+};
+
+const getUserDrafts = async (userId) => {
+  return Post.find({ authorId: userId, isDraft: true, isDeleted: { $ne: true } })
+    .sort({ updatedAt: -1 })
+    .populate("authorId", "username fullName avatar")
+    .lean();
+};
+
+const getUserArchived = async (userId) => {
+  return Post.find({ authorId: userId, isArchived: true, isDraft: { $ne: true }, isDeleted: { $ne: true } })
+    .sort({ createdAt: -1 })
+    .populate("authorId", "username fullName avatar")
+    .lean();
+};
+
+const toggleArchivePost = async ({ postId, userId }) => {
+  const post = await Post.findById(postId);
+  if (!post || post.isDeleted) {
+    const err = new Error("Post not found");
+    err.statusCode = 404;
+    throw err;
+  }
+  if (post.authorId.toString() !== userId.toString()) {
+    const err = new Error("Not authorized to archive this post");
+    err.statusCode = 403;
+    throw err;
+  }
+  post.isArchived = !post.isArchived;
+  await post.save();
+  await redis.del(`post:${postId}`);
+  return post;
+};
+
+const publishDraft = async ({ postId, userId }) => {
+  const post = await Post.findById(postId);
+  if (!post || post.isDeleted) {
+    const err = new Error("Draft not found");
+    err.statusCode = 404;
+    throw err;
+  }
+  if (post.authorId.toString() !== userId.toString()) {
+    const err = new Error("Not authorized to publish this draft");
+    err.statusCode = 403;
+    throw err;
+  }
+  post.isDraft = false;
+  await post.save();
+  await redis.del(`post:${postId}`);
+  return post.populate("authorId", "username fullName avatar");
 };
 
 module.exports = {
@@ -153,5 +272,9 @@ module.exports = {
   updatePost,
   deletePost,
   getPostsByUser,
+  getUserDrafts,
+  getUserArchived,
+  toggleArchivePost,
+  publishDraft,
   canViewPost,
 };

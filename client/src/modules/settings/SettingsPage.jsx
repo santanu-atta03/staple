@@ -63,6 +63,8 @@ import {
   unblockUser,
   submitSupportTicket,
   triggerArchiveExport,
+  deactivateAccount,
+  deleteAccount,
 } from "./settings.api";
 
 // Navigation section definitions
@@ -1026,6 +1028,50 @@ export default function SettingsPage() {
                       )}
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* Account Deactivation & Deletion */}
+              <div className="mt-8 border-t border-[#ece8de] pt-6">
+                <h3 className="text-sm font-semibold text-[#1b1c19]">Account Lifecycle</h3>
+                <p className="mt-1 text-xs text-[#71717a]">
+                  Temporarily deactivate your account (can be reactivated on sign in) or permanently delete it.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const pwd = window.prompt("Enter your password to deactivate your account:");
+                      if (pwd === null) return;
+                      try {
+                        await deactivateAccount(pwd);
+                        if (logout) await logout();
+                        navigate("/signin");
+                      } catch (err) {
+                        showToast(err.response?.data?.message || "Could not deactivate account");
+                      }
+                    }}
+                    className="rounded-full border border-[#d4d0c5] bg-white px-4 py-2 text-xs font-semibold text-[#1b1c19] hover:bg-[#f0eee9] transition cursor-pointer"
+                  >
+                    Deactivate Account
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const pwd = window.prompt("This permanently deletes your account. Enter your password to confirm:");
+                      if (pwd === null) return;
+                      try {
+                        await deleteAccount(pwd);
+                        if (logout) await logout();
+                        navigate("/signin");
+                      } catch (err) {
+                        showToast(err.response?.data?.message || "Could not delete account");
+                      }
+                    }}
+                    className="rounded-full bg-[#dc2626] px-4 py-2 text-xs font-semibold text-white hover:bg-[#b91c1c] transition cursor-pointer"
+                  >
+                    Delete Account Permanently
+                  </button>
                 </div>
               </div>
             </Card>

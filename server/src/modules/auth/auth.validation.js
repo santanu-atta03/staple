@@ -14,8 +14,11 @@ const registerSchema = z.object({
     .max(254),
 
   password: z.string()
-    .min(8)
-    .max(128),
+    .min(8, "Password must be at least 8 characters")
+    .max(128)
+    .regex(/[a-z]/, "Password must include a lowercase letter")
+    .regex(/[A-Z]/, "Password must include an uppercase letter")
+    .regex(/[0-9]/, "Password must include a number"),
 
   fullName: z.string()
     .trim()
@@ -32,6 +35,8 @@ const loginSchema = z.object({
   password: z.string()
     .min(1)
     .max(128),
+
+  rememberMe: z.boolean().optional(),
 });
 
 module.exports = {

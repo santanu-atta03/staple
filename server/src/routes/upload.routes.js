@@ -67,6 +67,12 @@ router.post(
       const media = [];
 
       for (const file of req.files) {
+        if (typeof upload.hasValidMagicBytes === "function" && !upload.hasValidMagicBytes(file.buffer, file.mimetype)) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid file content for ${file.originalname || file.mimetype}`,
+          });
+        }
         if (isCloudinaryConfigured()) {
           try {
             const result = await uploadBufferToCloudinary(

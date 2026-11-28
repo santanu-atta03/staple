@@ -1,13 +1,13 @@
-import axios from "axios";
+import api from "../../api/axios";
 
-const API_BASE = "/api/v1/settings";
+const API_BASE = "/settings";
 
 /**
  * Fetch full settings document from backend DB
  */
 export async function fetchSettings() {
   try {
-    const res = await axios.get(API_BASE);
+    const res = await api.get(API_BASE);
     return res.data;
   } catch (err) {
     console.error("Failed to fetch settings:", err);
@@ -20,7 +20,7 @@ export async function fetchSettings() {
  */
 export async function updateSettings(data) {
   try {
-    const res = await axios.patch(API_BASE, data);
+    const res = await api.patch(API_BASE, data);
     return res.data;
   } catch (err) {
     console.error("Failed to update settings:", err);
@@ -33,7 +33,7 @@ export async function updateSettings(data) {
  */
 export async function updateAvatar(avatar) {
   try {
-    const res = await axios.post(`${API_BASE}/avatar`, { avatar });
+    const res = await api.post(`${API_BASE}/avatar`, { avatar });
     return res.data;
   } catch (err) {
     console.error("Failed to update avatar:", err);
@@ -46,7 +46,7 @@ export async function updateAvatar(avatar) {
  */
 export async function updateProfileSettings(data) {
   try {
-    const res = await axios.patch(`${API_BASE}/profile`, data);
+    const res = await api.patch(`${API_BASE}/profile`, data);
     return res.data;
   } catch (err) {
     console.error("Failed to update profile settings:", err);
@@ -59,7 +59,7 @@ export async function updateProfileSettings(data) {
  */
 export async function updatePassword({ currentPassword, newPassword }) {
   try {
-    const res = await axios.post(`${API_BASE}/password`, { currentPassword, newPassword });
+    const res = await api.post(`${API_BASE}/password`, { currentPassword, newPassword });
     return res.data;
   } catch (err) {
     console.error("Failed to update password:", err);
@@ -72,7 +72,7 @@ export async function updatePassword({ currentPassword, newPassword }) {
  */
 export async function revokeSession(sessionId) {
   try {
-    const res = await axios.post(`${API_BASE}/sessions/${sessionId}/revoke`);
+    const res = await api.post(`${API_BASE}/sessions/${sessionId}/revoke`);
     return res.data;
   } catch (err) {
     console.error("Failed to revoke session:", err);
@@ -85,12 +85,22 @@ export async function revokeSession(sessionId) {
  */
 export async function revokeAllOtherSessions() {
   try {
-    const res = await axios.post(`${API_BASE}/sessions/revoke-all`);
+    const res = await api.post(`${API_BASE}/sessions/revoke-all`);
     return res.data;
   } catch (err) {
     console.error("Failed to revoke all other sessions:", err);
     throw err;
   }
+}
+
+export async function deactivateAccount(password) {
+  const res = await api.post("/auth/deactivate", { password });
+  return res.data;
+}
+
+export async function deleteAccount(password) {
+  const res = await api.delete("/auth/account", { data: { password } });
+  return res.data;
 }
 
 /**

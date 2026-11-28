@@ -61,24 +61,24 @@ const getFollowerIds = async (userId) => {
   return redis.smembers(key);
 };
 
-const getFollowersList = async (userId, page = 1, limit = 20) => {
+const getFollowersList = async (userId, page = 1, limit = 20, fetchLimit = limit) => {
   const skip = (page - 1) * limit;
   const docs = await Follow.find({ followingId: userId })
     .sort({ createdAt: -1 })
     .skip(skip)
-    .limit(limit)
+    .limit(fetchLimit)
     .populate("followerId", "username fullName avatar")
     .lean();
 
   return docs.map((d) => d.followerId).filter(Boolean);
 };
 
-const getFollowingList = async (userId, page = 1, limit = 20) => {
+const getFollowingList = async (userId, page = 1, limit = 20, fetchLimit = limit) => {
   const skip = (page - 1) * limit;
   const docs = await Follow.find({ followerId: userId })
     .sort({ createdAt: -1 })
     .skip(skip)
-    .limit(limit)
+    .limit(fetchLimit)
     .populate("followingId", "username fullName avatar")
     .lean();
 

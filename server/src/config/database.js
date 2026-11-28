@@ -31,6 +31,8 @@ const connectDB = async () => {
     logger.info("MongoDB connected successfully");
 
     const User = require("../modules/users/user.model");
+    const Session = require("../modules/auth/session.model");
+    await Session.syncIndexes().catch(() => {});
     await User.updateMany(
       { emailVerified: { $exists: false } },
       { $set: { emailVerified: true } }

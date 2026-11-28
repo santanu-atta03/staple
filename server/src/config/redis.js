@@ -62,6 +62,21 @@ class MockRedis extends EventEmitter {
     return set ? set.size : 0;
   }
 
+  async smembers(key) {
+    const set = this.sets.get(key);
+    return set ? Array.from(set) : [];
+  }
+
+  async srem(key, ...members) {
+    const set = this.sets.get(key);
+    if (!set) return 0;
+    let removed = 0;
+    for (const m of members) {
+      if (set.delete(String(m))) removed++;
+    }
+    return removed;
+  }
+
   async exists(key) {
     return this.store.has(key) || this.sets.has(key) || this.lists.has(key) ? 1 : 0;
   }

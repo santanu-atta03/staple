@@ -20,6 +20,11 @@ import {
   MessageSquare,
   UserPlus,
   UserCheck,
+  Lock,
+  MoreHorizontal,
+  ShieldAlert,
+  Flag,
+  Bookmark,
 } from "lucide-react";
 import { useSocket } from "../../context/SocketContext";
 import { useAuth } from "../../context/AuthContext";
@@ -29,7 +34,12 @@ import {
   fetchUserPosts,
   fetchUserHighlights,
   createUserHighlight,
+  fetchUserFollowers,
+  fetchUserFollowing,
   toggleFollowUser,
+  toggleBlockUser,
+  reportUser,
+  removeFollower,
 } from "./profile.api";
 import { createConversation } from "../messages/messages.api";
 import { updateAvatar } from "../settings/settings.api";
@@ -56,8 +66,10 @@ function ProfilePageContent({ currentUsername }) {
 
   const isSelf = Boolean(
     authUser &&
-      (currentUsername.toLowerCase() === authUser.username?.toLowerCase() ||
-        !currentUsername)
+      (!currentUsername ||
+        currentUsername.toLowerCase() === "me" ||
+        currentUsername.toLowerCase() === (authUser.username || "").toLowerCase() ||
+        currentUsername === (authUser._id || authUser.id)?.toString())
   );
 
   const fallbackAvatar = "/default-avatar.svg";
@@ -100,6 +112,10 @@ function ProfilePageContent({ currentUsername }) {
 
   const [highlights, setHighlights] = useState([]);
   const [posts, setPosts] = useState([]);
+  const [followersList, setFollowersList] = useState([]);
+  const [followingList, setFollowingList] = useState([]);
+  const [isLoadingFollowLists, setIsLoadingFollowLists] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -246,7 +262,8 @@ function ProfilePageContent({ currentUsername }) {
       const res = await toggleFollowUser(currentUsername);
       setProfileData((prev) => ({
         ...prev,
-        isFollowing: res.isFollowing,
+        isFollowing: Boolean(res.isFollowing),
+        hasPendingRequest: Boolean(res.hasPendingRequest),
         followersCount: res.followersCount ?? prev.followersCount,
       }));
       window.dispatchEvent(
@@ -258,7 +275,11 @@ function ProfilePageContent({ currentUsername }) {
           },
         })
       );
-      showToast(res.isFollowing ? `Following @${currentUsername}` : `Unfollowed @${currentUsername}`);
+      if (res.hasPendingRequest) {
+        showToast(`Follow request sent to @${currentUsername}`);
+      } else {
+        showToast(res.isFollowing ? `Following @${currentUsername}` : `Unfollowed @${currentUsername}`);
+      }
     } catch (err) {
       console.error("Failed to toggle follow:", err);
       showToast("Could not update follow status");
@@ -292,11 +313,18 @@ function ProfilePageContent({ currentUsername }) {
     try {
       const updated = await updateUserProfile(formData);
       setProfileData((prev) => ({ ...prev, ...updated }));
+      if (setUser && updated) {
+        setUser((prev) => (prev ? { ...prev, ...updated } : prev));
+      }
       setShowEditModal(false);
       showToast("Profile changes saved successfully!");
+      if (updated?.username && updated.username !== currentUsername) {
+        navigate(`/u/${updated.username}`, { replace: true });
+      }
     } catch (err) {
       console.error("Failed to update profile:", err);
-      showToast("Could not save profile changes");
+      showToast(err.response?.data?.message || "Could not save profile changes");
+      throw err;
     }
   };
 
@@ -339,9 +367,23 @@ function ProfilePageContent({ currentUsername }) {
     }
   };
 
-  const openFollowers = (tab = "followers") => {
+  const openFollowers = async (tab = "followers") => {
     setFollowersModalTab(tab);
     setShowFollowersModal(true);
+    setIsLoadingFollowLists(true);
+    try {
+      const targetHandle = profileData.username || currentUsername;
+      const [followersData, followingData] = await Promise.all([
+        fetchUserFollowers(targetHandle),
+        fetchUserFollowing(targetHandle),
+      ]);
+      setFollowersList(Array.isArray(followersData) ? followersData : []);
+      setFollowingList(Array.isArray(followingData) ? followingData : []);
+    } catch (err) {
+      console.error("Failed to load followers/following:", err);
+    } finally {
+      setIsLoadingFollowLists(false);
+    }
   };
 
   return (
@@ -460,7 +502,7 @@ function ProfilePageContent({ currentUsername }) {
                       type="button"
                       onClick={handleToggleFollow}
                       className={`flex items-center gap-1.5 rounded-full px-5 py-2 text-xs sm:text-[13px] font-semibold transition active:scale-95 cursor-pointer ${
-                        profileData.isFollowing
+                        profileData.isFollowing || profileData.hasPendingRequest
                           ? "bg-[#f0eee9] text-[#1b1c19] hover:bg-[#e4e2dd]"
                           : "bg-black text-white hover:bg-neutral-800 shadow-xs"
                       }`}
@@ -469,6 +511,11 @@ function ProfilePageContent({ currentUsername }) {
                         <>
                           <UserCheck className="h-3.5 w-3.5" />
                           <span>Following</span>
+                        </>
+                      ) : profileData.hasPendingRequest ? (
+                        <>
+                          <Lock className="h-3.5 w-3.5" />
+                          <span>Requested</span>
                         </>
                       ) : (
                         <>
@@ -486,6 +533,71 @@ function ProfilePageContent({ currentUsername }) {
                       <MessageSquare className="h-3.5 w-3.5" />
                       <span>Message</span>
                     </button>
+
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowProfileMenu((prev) => !prev)}
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f0eee9] text-[#1b1c19] hover:bg-[#e4e2dd] transition cursor-pointer"
+                        title="Profile options"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                      {showProfileMenu && (
+                        <div className="absolute right-0 top-11 z-40 w-48 rounded-2xl border border-[#ece8de] bg-white p-1.5 shadow-xl">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowProfileMenu(false);
+                              handleShareProfile();
+                            }}
+                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-[#1b1c19] hover:bg-[#f4f2ea] cursor-pointer"
+                          >
+                            <LinkIcon className="h-3.5 w-3.5" />
+                            <span>Copy Profile Link</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setShowProfileMenu(false);
+                              try {
+                                const res = await toggleBlockUser(profileData.username);
+                                setProfileData((prev) => ({
+                                  ...prev,
+                                  isBlocked: res.isBlocked,
+                                  isFollowing: res.isBlocked ? false : prev.isFollowing,
+                                }));
+                                showToast(res.isBlocked ? `Blocked @${profileData.username}` : `Unblocked @${profileData.username}`);
+                              } catch {
+                                showToast("Could not update block status");
+                              }
+                            }}
+                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-[#dc2626] hover:bg-red-50 cursor-pointer"
+                          >
+                            <ShieldAlert className="h-3.5 w-3.5" />
+                            <span>{profileData.isBlocked ? "Unblock User" : "Block User"}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setShowProfileMenu(false);
+                              const reason = window.prompt(`Why are you reporting @${profileData.username}?`);
+                              if (!reason || !reason.trim()) return;
+                              try {
+                                await reportUser(profileData.username, reason.trim());
+                                showToast("Report submitted. Thank you.");
+                              } catch {
+                                showToast("Could not submit report");
+                              }
+                            }}
+                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-[#dc2626] hover:bg-red-50 cursor-pointer"
+                          >
+                            <Flag className="h-3.5 w-3.5" />
+                            <span>Report User</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
 
@@ -529,6 +641,31 @@ function ProfilePageContent({ currentUsername }) {
               <p className="mt-3.5 text-[13.5px] sm:text-[14px] text-[#2d2d30] leading-relaxed">
                 {profileData.bio}
               </p>
+            )}
+
+            {/* Mutual Followers Preview */}
+            {!profileData.isSelf && profileData.mutualFollowersPreview?.length > 0 && (
+              <div className="mt-2.5 flex items-center gap-2 text-xs text-[#71717a]">
+                <div className="flex -space-x-1.5">
+                  {profileData.mutualFollowersPreview.map((m) => (
+                    <img
+                      key={m.id}
+                      src={m.avatar || "/default-avatar.svg"}
+                      alt={m.name}
+                      className="h-5 w-5 rounded-full object-cover ring-2 ring-white"
+                    />
+                  ))}
+                </div>
+                <span>
+                  Followed by{" "}
+                  <strong className="text-[#1b1c19]">
+                    {profileData.mutualFollowersPreview.map((m) => m.username).join(", ")}
+                  </strong>
+                  {profileData.mutualFollowersCount > profileData.mutualFollowersPreview.length
+                    ? ` + ${profileData.mutualFollowersCount - profileData.mutualFollowersPreview.length} more`
+                    : ""}
+                </span>
+              </div>
             )}
 
             {/* Metadata row: link, location, joined date */}
@@ -669,7 +806,12 @@ function ProfilePageContent({ currentUsername }) {
                 { id: "posts", label: "Posts", icon: Grid },
                 { id: "reels", label: "Reels", icon: Film },
                 { id: "tagged", label: "Tagged", icon: Tag },
-                { id: "notes", label: "Notes", icon: Repeat2 },
+                ...(profileData.isSelf
+                  ? [
+                      { id: "saved", label: "Saved", icon: Bookmark },
+                      { id: "archived", label: "Archived", icon: Layers },
+                    ]
+                  : []),
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -712,7 +854,15 @@ function ProfilePageContent({ currentUsername }) {
             </div>
           </div>
 
-          {posts.length > 0 ? (
+          {profileData.isRestricted ? (
+            <div className="flex flex-col items-center gap-2 rounded-3xl border border-[#ece8de] bg-white px-6 py-12 text-center shadow-xs">
+              <Lock className="h-7 w-7 text-[#78767b]" />
+              <p className="text-sm font-bold text-[#1b1c19]">This account is private</p>
+              <p className="text-xs text-[#71717a] max-w-xs">
+                Follow @{profileData.username} to see their photos, reels, and lists.
+              </p>
+            </div>
+          ) : posts.length > 0 ? (
             <div id="profile-posts-grid" className="grid grid-cols-3 gap-2 sm:gap-3 w-full">
             {posts.map((post) => (
               <article
@@ -814,7 +964,44 @@ function ProfilePageContent({ currentUsername }) {
         <FollowersModal
           isOpen={showFollowersModal}
           username={profileData.username}
+          isSelf={profileData.isSelf}
           initialTab={followersModalTab}
+          followers={followersList}
+          following={followingList}
+          isLoading={isLoadingFollowLists}
+          onRemoveFollower={async (followerUsername) => {
+            try {
+              const res = await removeFollower(followerUsername);
+              setProfileData((prev) => ({
+                ...prev,
+                followersCount: res.followersCount ?? prev.followersCount,
+              }));
+              setFollowersList((prev) => prev.filter((f) => f.username !== followerUsername));
+              showToast(`Removed @${followerUsername}`);
+            } catch {
+              showToast("Could not remove follower");
+            }
+          }}
+          onToggleFollow={async (targetUsername) => {
+            try {
+              const res = await toggleFollowUser(targetUsername);
+              if (isSelf) {
+                setProfileData((prev) => ({
+                  ...prev,
+                  followingCount: res.followingCount ?? prev.followingCount,
+                }));
+              }
+              const targetHandle = profileData.username || currentUsername;
+              const [followersData, followingData] = await Promise.all([
+                fetchUserFollowers(targetHandle),
+                fetchUserFollowing(targetHandle),
+              ]);
+              setFollowersList(Array.isArray(followersData) ? followersData : []);
+              setFollowingList(Array.isArray(followingData) ? followingData : []);
+            } catch (err) {
+              console.error("Failed to toggle follow in modal:", err);
+            }
+          }}
           onClose={() => setShowFollowersModal(false)}
         />
       )}

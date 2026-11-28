@@ -4,7 +4,7 @@ const createComment = async (req, res, next) => {
   try {
     const userId = req.user._id || req.user.id;
     const { postId } = req.params;
-    const { content } = req.body;
+    const content = req.body.content || req.body.text;
 
     const comment = await commentService.addComment({
       postId,

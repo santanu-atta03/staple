@@ -14,76 +14,137 @@ import {
   Sparkles,
   UploadCloud,
 } from "lucide-react";
-import { createNewPost, uploadMediaFiles } from "../modules/Home/home.api";
+import api from "../api/axios";
+import { createNewPost } from "../modules/Home/home.api";
 
 export default function GlobalPostModal({ isOpen, onClose, onPostCreated }) {
   const { user } = useAuth();
   const [content, setContent] = useState("");
   const [location, setLocation] = useState("");
   const [tagsInput, setTagsInput] = useState("");
+  const [taggedUsersInput, setTaggedUsersInput] = useState("");
   const [selectedFeeling, setSelectedFeeling] = useState("");
   const [showFeelings, setShowFeelings] = useState(false);
   const [visibility, setVisibility] = useState("public");
   const [mediaList, setMediaList] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef(null);
+  const uploadAbortRef = useRef(null);
 
   if (!isOpen) return null;
 
   const handleFilesSelected = async (e) => {
-    const files = e.target.files;
-    if (!files || !files.length) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
 
+    setUploadError("");
     setIsUploading(true);
+    setUploadProgress(0);
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
+
     try {
-      const uploaded = await uploadMediaFiles(files);
-      if (uploaded && uploaded.length > 0) {
-        setMediaList((prev) => [...prev, ...uploaded]);
+      const formData = new FormData();
+      files.forEach((f) => formData.append("files", f));
+      const { data } = await api.post("/uploads", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        signal: controller.signal,
+        onUploadProgress: (evt) => {
+          if (evt.total) {
+            setUploadProgress(Math.round((evt.loaded / evt.total) * 100));
+          }
+        },
+      });
+      if (data?.media?.length > 0) {
+        setMediaList((prev) => [...prev, ...data.media]);
       }
     } catch (err) {
-      console.error("Upload error:", err);
+      if (err.name !== "CanceledError" && err.code !== "ERR_CANCELED") {
+        setUploadError(err.response?.data?.message || "Upload failed. Check file format and size.");
+      }
     } finally {
+      uploadAbortRef.current = null;
       setIsUploading(false);
+      setUploadProgress(0);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  const handleCancelUpload = () => {
+    if (uploadAbortRef.current) {
+      uploadAbortRef.current.abort();
+      uploadAbortRef.current = null;
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleMoveMedia = (idx, dir) => {
+    setMediaList((prev) => {
+      const next = [...prev];
+      const targetIdx = idx + dir;
+      if (targetIdx < 0 || targetIdx >= next.length) return prev;
+      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+      return next;
+    });
   };
 
   const handleRemoveMedia = (idx) => {
     setMediaList((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const submitPost = async (asDraft = false) => {
     if (!content.trim() && mediaList.length === 0) return;
 
     setIsSubmitting(true);
+    setUploadError("");
     try {
       const extractedTags = tagsInput
-        .split(" ")
+        .split(/[\s,]+/)
         .map((t) => t.trim())
-        .filter((t) => t.startsWith("#") || t.length > 0)
+        .filter((t) => t.length > 0)
         .map((t) => (t.startsWith("#") ? t : `#${t}`));
+
+      const taggedUsers = taggedUsersInput
+        .split(/[\s,]+/)
+        .map((u) => u.replace(/^@/, "").trim().toLowerCase())
+        .filter(Boolean);
 
       const feelingSuffix = selectedFeeling ? ` — feeling ${selectedFeeling}` : "";
       const finalContent = content.trim() + feelingSuffix;
 
-      const newPost = await createNewPost({
+      const payload = {
         content: finalContent,
         media: mediaList,
         tags: extractedTags,
+        taggedUsers,
         location: location.trim(),
         visibility,
-      });
+        isDraft: asDraft,
+      };
+
+      const newPost = asDraft
+        ? (await api.post("/posts", payload)).data?.post
+        : await createNewPost(payload);
 
       if (onPostCreated) onPostCreated(newPost);
       onClose();
-      // Notify window if Home is open
-      window.dispatchEvent(new CustomEvent("staple:post_created", { detail: newPost }));
+      if (!asDraft) {
+        window.dispatchEvent(new CustomEvent("staple:post_created", { detail: newPost }));
+      }
     } catch (err) {
-      console.error("Failed to create post:", err);
+      setUploadError(err.response?.data?.message || "Failed to save post.");
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await submitPost(false);
   };
 
   return (
@@ -163,16 +224,42 @@ export default function GlobalPostModal({ isOpen, onClose, onPostCreated }) {
             </div>
           )}
 
-          {/* Uploading indicator */}
+          {/* Uploading indicator with progress & cancel */}
           {isUploading && (
-            <div className="flex items-center gap-2 rounded-xl bg-[#f5f2ea] p-3 text-[12.5px] text-neutral-700">
-              <Loader2 className="h-4 w-4 animate-spin text-black" />
-              <span>Uploading image via Cloudinary...</span>
+            <div className="space-y-2 rounded-xl bg-[#f5f2ea] p-3 text-[12.5px] text-neutral-700">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-black" />
+                  <span>Uploading media... {uploadProgress}%</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCancelUpload}
+                  className="text-xs font-semibold text-red-600 hover:underline cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-black/10 overflow-hidden">
+                <div
+                  className="h-full bg-black transition-all duration-150"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
             </div>
           )}
 
-          {/* Extra tools: Feeling, Location, Tags */}
+          {uploadError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {uploadError}
+            </div>
+          )}
+
+          {/* Extra tools: Feeling, Location, Tags, Tagged Users */}
           <div className="space-y-2">
+            <div className="flex justify-end text-[11px] text-neutral-400">
+              {content.length} / 5000
+            </div>
             {showFeelings && (
               <div className="flex flex-wrap gap-1.5 rounded-xl border border-[#ece8de] bg-[#faf9f5] p-2 text-[12px]">
                 {["✨ Grateful", "☕ Cozy", "📸 Inspired", "🌿 Peaceful", "🎧 In the Groove", "🗼 Traveling"].map(
@@ -193,39 +280,46 @@ export default function GlobalPostModal({ isOpen, onClose, onPostCreated }) {
               </div>
             )}
 
-            <div className="flex items-center gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <input
                 type="text"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                placeholder="📍 Add location (e.g. San Francisco, CA)"
-                className="flex-1 rounded-xl border border-[#ece8de] bg-[#fdfcf9] px-3 py-1.5 text-[12.5px] placeholder-neutral-400 focus:border-black focus:outline-none"
+                placeholder="📍 Location"
+                className="rounded-xl border border-[#ece8de] bg-[#fdfcf9] px-3 py-1.5 text-[12.5px] placeholder-neutral-400 focus:border-black focus:outline-none"
               />
               <input
                 type="text"
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
                 placeholder="#hashtags"
-                className="w-36 rounded-xl border border-[#ece8de] bg-[#fdfcf9] px-3 py-1.5 text-[12.5px] placeholder-neutral-400 focus:border-black focus:outline-none"
+                className="rounded-xl border border-[#ece8de] bg-[#fdfcf9] px-3 py-1.5 text-[12.5px] placeholder-neutral-400 focus:border-black focus:outline-none"
+              />
+              <input
+                type="text"
+                value={taggedUsersInput}
+                onChange={(e) => setTaggedUsersInput(e.target.value)}
+                placeholder="@tag users"
+                className="rounded-xl border border-[#ece8de] bg-[#fdfcf9] px-3 py-1.5 text-[12.5px] placeholder-neutral-400 focus:border-black focus:outline-none"
               />
             </div>
           </div>
 
           {/* Bottom Actions Row */}
-          <div className="flex items-center justify-between border-t border-[#ece8de] pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#ece8de] pt-3">
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-1.5 rounded-full bg-[#f2efe9] px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-[#eae6de] transition"
+                className="flex items-center gap-1.5 rounded-full bg-[#f2efe9] px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-[#eae6de] transition cursor-pointer"
               >
                 <ImageIcon className="h-4 w-4 text-emerald-600" />
-                <span>Upload Photo/Video</span>
+                <span>Photo/Video</span>
               </button>
               <button
                 type="button"
                 onClick={() => setShowFeelings(!showFeelings)}
-                className="flex items-center gap-1.5 rounded-full bg-[#f2efe9] px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-[#eae6de] transition"
+                className="flex items-center gap-1.5 rounded-full bg-[#f2efe9] px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-[#eae6de] transition cursor-pointer"
               >
                 <Smile className="h-4 w-4 text-amber-500" />
                 <span>Feeling</span>
@@ -236,25 +330,35 @@ export default function GlobalPostModal({ isOpen, onClose, onPostCreated }) {
               ref={fileInputRef}
               type="file"
               multiple
-              accept="image/*,video/*"
+              accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
               className="hidden"
               onChange={handleFilesSelected}
             />
 
-            <button
-              type="submit"
-              disabled={isSubmitting || (!content.trim() && mediaList.length === 0)}
-              className="flex items-center gap-2 rounded-full bg-black px-6 py-2 text-[13px] font-semibold text-white transition hover:bg-neutral-800 disabled:opacity-50"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Publishing...</span>
-                </>
-              ) : (
-                <span>Post</span>
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={isSubmitting || (!content.trim() && mediaList.length === 0)}
+                onClick={() => submitPost(true)}
+                className="rounded-full bg-[#f2efe9] px-4 py-2 text-[12.5px] font-semibold text-[#1b1c19] hover:bg-[#e4e2dd] transition disabled:opacity-50 cursor-pointer"
+              >
+                Save Draft
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting || isUploading || (!content.trim() && mediaList.length === 0)}
+                className="flex items-center gap-2 rounded-full bg-black px-6 py-2 text-[13px] font-semibold text-white transition hover:bg-neutral-800 disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Publishing...</span>
+                  </>
+                ) : (
+                  <span>Post</span>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

@@ -362,15 +362,18 @@ export default function MessagePage() {
       if (res && res.message) {
         setConversations((prev) =>
           prev.map((c) => {
-            if (c.id === activeContactId) {
-              return {
-                ...c,
-                messages: (c.messages || [])
-                  .filter((m) => m.id === tempMsg.id || m.id !== res.message.id)
-                  .map((m) => (m.id === tempMsg.id ? res.message : m)),
-              };
-            }
-            return c;
+            if (c.id !== activeContactId) return c;
+            const currentMsgs = c.messages || [];
+            const hasSavedAlready = currentMsgs.some((m) => m.id === res.message.id);
+            const nextMsgs = hasSavedAlready
+              ? currentMsgs.filter((m) => m.id !== tempMsg.id)
+              : currentMsgs.map((m) => (m.id === tempMsg.id ? res.message : m));
+            return {
+              ...c,
+              lastMessage: res.message.text || messageText,
+              time: "Just now",
+              messages: nextMsgs,
+            };
           })
         );
       }

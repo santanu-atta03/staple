@@ -33,6 +33,7 @@ const loadScript = (src) =>
 export default function AuthPage({ initialMode = "signin" }) {
   const {
     login,
+    reactivateAccount,
     initiateRegistration,
     resendRegistrationCode,
     verifyRegistration,
@@ -46,7 +47,9 @@ export default function AuthPage({ initialMode = "signin" }) {
   } = useAuth();
   const navigate = useNavigate();
 
-  const [mode, setMode] = useState(initialMode); // "signin" | "signup"
+  const [mode, setMode] = useState(
+    initialMode === "signup" ? "signup" : "signin"
+  ); // "signin" | "signup"
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [toastMessage, setToastMessage] = useState(null);
@@ -77,9 +80,11 @@ export default function AuthPage({ initialMode = "signin" }) {
     username: "",
     email: "",
     password: "",
+    confirmPassword: "",
     agreedToTerms: false,
   });
   const [showSignUpPassword, setShowSignUpPassword] = useState(false);
+  const [showReactivateButton, setShowReactivateButton] = useState(false);
   const [handleAvailable, setHandleAvailable] = useState(null); // null | true | false
   const [isCheckingHandle, setIsCheckingHandle] = useState(false);
   const handleCheckTimer = useRef(null);
@@ -91,13 +96,18 @@ export default function AuthPage({ initialMode = "signin" }) {
   const [resendCooldown, setResendCooldown] = useState(0);
 
   // Forgot / Reset Password Modal State
-  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(
+    initialMode === "forgot" || initialMode === "reset"
+  );
   const [forgotData, setForgotData] = useState({
     identity: "",
     otp: "",
     newPassword: "",
+    confirmNewPassword: "",
   });
-  const [forgotStep, setForgotStep] = useState("identity");
+  const [forgotStep, setForgotStep] = useState(
+    initialMode === "reset" ? "verification" : "identity"
+  );
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotFeedback, setForgotFeedback] = useState("");
 
@@ -128,7 +138,8 @@ export default function AuthPage({ initialMode = "signin" }) {
     if (targetMode === mode) return;
     setMode(targetMode);
     setErrorMessage("");
-    window.history.replaceState(null, "", targetMode === "signin" ? "/login" : "/register");
+    setShowReactivateButton(false);
+    window.history.replaceState(null, "", targetMode === "signin" ? "/signin" : "/signup");
   };
 
   // Live Handle Checking with DB / Store
@@ -203,9 +214,11 @@ export default function AuthPage({ initialMode = "signin" }) {
     showToast("Authenticating credentials...");
 
     try {
+      setShowReactivateButton(false);
       await login({
         email: idClean,
         password: passClean,
+        rememberMe: signInData.rememberDevice,
       });
 
       if (signInData.rememberDevice) {
@@ -217,10 +230,33 @@ export default function AuthPage({ initialMode = "signin" }) {
       showToast("Welcome back! Redirecting...");
       setTimeout(() => navigate("/"), 350);
     } catch (err) {
+      const code = err.response?.data?.code;
+      if (code === "ACCOUNT_DEACTIVATED") {
+        setShowReactivateButton(true);
+      }
       const msg =
         err.response?.data?.message ||
         "Invalid username/email or password. Please check your credentials.";
       setErrorMessage(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleReactivateAccount = async () => {
+    setSubmitting(true);
+    setErrorMessage("");
+    try {
+      await reactivateAccount({
+        email: signInData.identity.trim(),
+        password: signInData.password,
+        rememberMe: signInData.rememberDevice,
+      });
+      setShowReactivateButton(false);
+      showToast("Account reactivated! Welcome back.");
+      setTimeout(() => navigate("/"), 350);
+    } catch (err) {
+      setErrorMessage(err.response?.data?.message || "Could not reactivate account.");
     } finally {
       setSubmitting(false);
     }
@@ -234,8 +270,23 @@ export default function AuthPage({ initialMode = "signin" }) {
       setErrorMessage("Please accept the Terms of Service & Privacy Policy.");
       return;
     }
-    if (registrationStep === "details" && signUpData.password.length < 8) {
-      setErrorMessage("Password must be at least 8 characters.");
+    if (
+      registrationStep === "details" &&
+      (signUpData.password.length < 8 ||
+        !/[a-z]/.test(signUpData.password) ||
+        !/[A-Z]/.test(signUpData.password) ||
+        !/[0-9]/.test(signUpData.password))
+    ) {
+      setErrorMessage(
+        "Password must be at least 8 characters and include uppercase, lowercase, and a number."
+      );
+      return;
+    }
+    if (
+      registrationStep === "details" &&
+      signUpData.password !== signUpData.confirmPassword
+    ) {
+      setErrorMessage("Passwords do not match.");
       return;
     }
     if (registrationStep === "details" && handleAvailable !== true) {
@@ -260,8 +311,8 @@ export default function AuthPage({ initialMode = "signin" }) {
         showToast("Verification code sent. Check your email.");
       } else {
         await verifyRegistration(signUpData.email.trim(), verificationCode);
+        setRegistrationStep("success");
         showToast("Email verified. Welcome to Staple.");
-        setTimeout(() => navigate("/"), 350);
       }
     } catch (err) {
       const resData = err.response?.data;
@@ -408,6 +459,10 @@ export default function AuthPage({ initialMode = "signin" }) {
           setForgotFeedback("Enter the six-digit code and a new password of at least 8 characters.");
           return;
         }
+        if (forgotData.newPassword !== forgotData.confirmNewPassword) {
+          setForgotFeedback("New passwords do not match.");
+          return;
+        }
         await resetPassword(
           forgotData.identity.trim(),
           forgotData.otp.trim(),
@@ -420,7 +475,7 @@ export default function AuthPage({ initialMode = "signin" }) {
           password: "",
         }));
         setShowForgotModal(false);
-        setForgotData({ identity: "", otp: "", newPassword: "" });
+        setForgotData({ identity: "", otp: "", newPassword: "", confirmNewPassword: "" });
         setForgotStep("identity");
       }
     } catch (err) {
@@ -528,11 +583,23 @@ export default function AuthPage({ initialMode = "signin" }) {
 
                 {/* Error Banner */}
                 {errorMessage && (
-                  <div className="mb-5 rounded-2xl border border-[#ba1a1a]/30 bg-[#ffdad6]/40 p-3.5 text-[12.5px] font-medium text-[#ba1a1a] flex items-center gap-2 animate-fade-in">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#ba1a1a] text-white text-[10px] font-bold">
-                      !
-                    </span>
-                    <span>{errorMessage}</span>
+                  <div className="mb-5 rounded-2xl border border-[#ba1a1a]/30 bg-[#ffdad6]/40 p-3.5 text-[12.5px] font-medium text-[#ba1a1a] flex flex-col gap-2.5 animate-fade-in">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#ba1a1a] text-white text-[10px] font-bold">
+                        !
+                      </span>
+                      <span>{errorMessage}</span>
+                    </div>
+                    {showReactivateButton && (
+                      <button
+                        type="button"
+                        onClick={handleReactivateAccount}
+                        disabled={submitting}
+                        className="self-start rounded-full bg-[#1b1c19] px-4 py-1.5 text-[11.5px] font-semibold text-white hover:bg-neutral-800 transition cursor-pointer disabled:opacity-60"
+                      >
+                        Reactivate Account &amp; Sign In
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -893,6 +960,39 @@ export default function AuthPage({ initialMode = "signin" }) {
                         </div>
                       </div>
 
+                      {/* Confirm Password Field */}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between">
+                          <label className="font-space font-semibold text-[12px] text-[#1b1c19]">
+                            Confirm Password
+                          </label>
+                          {signUpData.confirmPassword && (
+                            <span
+                              className={`font-space font-semibold text-[11px] ${
+                                signUpData.password === signUpData.confirmPassword
+                                  ? "text-[#16a34a]"
+                                  : "text-[#ba1a1a]"
+                              }`}
+                            >
+                              {signUpData.password === signUpData.confirmPassword
+                                ? "Passwords match"
+                                : "Passwords do not match"}
+                            </span>
+                          )}
+                        </div>
+                        <input
+                          type={showSignUpPassword ? "text" : "password"}
+                          required
+                          minLength={8}
+                          value={signUpData.confirmPassword}
+                          onChange={(e) =>
+                            setSignUpData({ ...signUpData, confirmPassword: e.target.value })
+                          }
+                          placeholder="Re-enter your password"
+                          className="w-full h-11 px-3.5 rounded-xl bg-white border border-[#1b1c19]/[0.12] text-[#1b1c19] text-[13.5px] placeholder-[#78767b]/60 focus:outline-none focus:border-[#a83820] focus:ring-2 focus:ring-[#a83820]/20 transition-all font-mono tracking-wider"
+                        />
+                      </div>
+
                       {/* Curated Interests Chips */}
                       <div className="flex flex-col gap-1.5 pt-1">
                         <label className="font-space font-semibold text-[12px] text-[#1b1c19]">
@@ -926,7 +1026,7 @@ export default function AuthPage({ initialMode = "signin" }) {
                         </div>
                       </div>
                         </>
-                      ) : (
+                      ) : registrationStep === "verification" ? (
                         <div className="flex flex-col gap-4">
                           <p className="text-[13px] text-[#47464b]">
                             Enter the six-digit verification code sent to <strong>{signUpData.email}</strong>.
@@ -955,6 +1055,28 @@ export default function AuthPage({ initialMode = "signin" }) {
                             {resendCooldown > 0
                               ? `Resend code in ${resendCooldown}s`
                               : "Resend verification code"}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center text-center gap-4 py-4">
+                          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#edfce9] text-[#16a34a]">
+                            <CheckCircle2 className="h-8 w-8" />
+                          </div>
+                          <div>
+                            <h3 className="font-space text-xl font-semibold text-[#1b1c19]">
+                              Account Created!
+                            </h3>
+                            <p className="text-[13px] text-[#47464b] mt-1">
+                              Welcome to Staple, @{signUpData.username}. Your email has been verified.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => navigate("/")}
+                            className="w-full h-11 rounded-full bg-[#1b1c19] hover:bg-[#2a2a32] text-white font-space font-semibold text-[13.5px] flex items-center justify-center gap-2 transition cursor-pointer"
+                          >
+                            <span>Continue to Staple</span>
+                            <ArrowRight className="h-4 w-4" />
                           </button>
                         </div>
                       )}
@@ -1002,23 +1124,25 @@ export default function AuthPage({ initialMode = "signin" }) {
                       </div>}
 
                       {/* Sign Up Submit CTA */}
-                      <button
-                        type="submit"
-                        disabled={submitting || (registrationStep === "details" && isCheckingHandle)}
-                        className="mt-2 w-full h-12 rounded-full bg-[#1b1c19] hover:bg-[#2a2a32] active:scale-[0.98] text-white font-space font-semibold text-[14px] flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer disabled:opacity-70"
-                      >
-                        {submitting ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin text-white" />
-                            <span>Creating Account...</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>{registrationStep === "details" ? "Send Verification Code" : "Verify Email & Create Account"}</span>
-                            <ArrowRight className="h-4 w-4" />
-                          </>
-                        )}
-                      </button>
+                      {registrationStep !== "success" && (
+                        <button
+                          type="submit"
+                          disabled={submitting || (registrationStep === "details" && isCheckingHandle)}
+                          className="mt-2 w-full h-12 rounded-full bg-[#1b1c19] hover:bg-[#2a2a32] active:scale-[0.98] text-white font-space font-semibold text-[14px] flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer disabled:opacity-70"
+                        >
+                          {submitting ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin text-white" />
+                              <span>Creating Account...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>{registrationStep === "details" ? "Send Verification Code" : "Verify Email & Create Account"}</span>
+                              <ArrowRight className="h-4 w-4" />
+                            </>
+                          )}
+                        </button>
+                      )}
                     </form>
 
                     <div className="mt-4 text-center">
@@ -1427,21 +1551,37 @@ export default function AuthPage({ initialMode = "signin" }) {
                   Resend verification code
                 </button>
                 <div className="flex flex-col gap-1">
-                <label className="font-space font-semibold text-[12px] text-[#1b1c19]">
-                  New Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  minLength={8}
-                  value={forgotData.newPassword}
-                  onChange={(e) =>
-                    setForgotData({ ...forgotData, newPassword: e.target.value })
-                  }
-                  placeholder="At least 8 characters"
-                  className="w-full h-11 px-3.5 rounded-xl bg-white border border-[#1b1c19]/[0.12] text-[#1b1c19] text-[13.5px] placeholder-[#78767b]/60 focus:outline-none focus:border-[#a83820] focus:ring-2 focus:ring-[#a83820]/20 transition-all font-mono"
-                />
-              </div>
+                  <label className="font-space font-semibold text-[12px] text-[#1b1c19]">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={forgotData.newPassword}
+                    onChange={(e) =>
+                      setForgotData({ ...forgotData, newPassword: e.target.value })
+                    }
+                    placeholder="At least 8 characters"
+                    className="w-full h-11 px-3.5 rounded-xl bg-white border border-[#1b1c19]/[0.12] text-[#1b1c19] text-[13.5px] placeholder-[#78767b]/60 focus:outline-none focus:border-[#a83820] focus:ring-2 focus:ring-[#a83820]/20 transition-all font-mono"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="font-space font-semibold text-[12px] text-[#1b1c19]">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={forgotData.confirmNewPassword}
+                    onChange={(e) =>
+                      setForgotData({ ...forgotData, confirmNewPassword: e.target.value })
+                    }
+                    placeholder="Re-enter new password"
+                    className="w-full h-11 px-3.5 rounded-xl bg-white border border-[#1b1c19]/[0.12] text-[#1b1c19] text-[13.5px] placeholder-[#78767b]/60 focus:outline-none focus:border-[#a83820] focus:ring-2 focus:ring-[#a83820]/20 transition-all font-mono"
+                  />
+                </div>
                 </>
               )}
 

@@ -39,10 +39,12 @@ import {
   Share2,
   UploadCloud,
   ChevronDown,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useSocket } from "../../context/SocketContext";
 import {
-  fetchFeed,
+  fetchFeedPage,
   createNewPost,
   deletePost,
   editPost,
@@ -73,10 +75,17 @@ import DeletePostModal from "./DeletePostModal";
 
 export default function HomePage() {
   const { user } = useAuth();
+  const { hasNewPosts, setHasNewPosts } = useSocket();
   const navigate = useNavigate();
   const [feedTab, setFeedTab] = useState("for-you");
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoadingFeed, setIsLoadingFeed] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [feedError, setFeedError] = useState("");
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const loadMoreRef = useRef(null);
 
   // People search state
   const [matchingPeople, setMatchingPeople] = useState([]);
@@ -152,17 +161,44 @@ export default function HomePage() {
     setTimeout(() => setToastMessage(null), 2800);
   };
 
-  // 1. Initial Load: Fetch Feed, Stories, and Sidebar from Backend DB
-  const loadFeedData = async () => {
-    setIsLoadingFeed(true);
+  const mergeUniquePosts = (prev, next) => {
+    const seen = new Set();
+    const merged = [];
+    for (const item of [...prev, ...next]) {
+      const key = String(item?._id || item?.id || "");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(item);
+    }
+    return merged;
+  };
+
+  // 1. Initial & Paginated Load: Fetch Feed, Stories, and Sidebar from Backend DB
+  const loadFeedData = async (targetPage = 1, { append = false, refresh = false } = {}) => {
+    if (append) {
+      setIsLoadingMore(true);
+    } else {
+      setIsLoadingFeed(true);
+      if (refresh) setIsRefreshing(true);
+    }
+    setFeedError("");
+
     try {
-      const feedData = await fetchFeed(feedTab, searchQuery);
-      setPosts(feedData || []);
+      const res = await fetchFeedPage(feedTab, searchQuery, { page: targetPage, limit: 12 });
+      setPosts((prev) => (append ? mergeUniquePosts(prev, res.posts) : res.posts));
+      setHasMore(Boolean(res.hasMore));
+      setPage(res.page || targetPage);
+      if (targetPage === 1) {
+        setHasNewPosts?.(false);
+      }
     } catch (err) {
       console.error("Feed load error:", err);
-      setPosts([]);
+      setFeedError("Could not load feed. Please try again.");
+      if (!append) setPosts([]);
     } finally {
       setIsLoadingFeed(false);
+      setIsLoadingMore(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -189,8 +225,23 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    loadFeedData();
+    loadFeedData(1);
   }, [feedTab]);
+
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el || !hasMore || isLoadingFeed || isLoadingMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadFeedData(page + 1, { append: true });
+        }
+      },
+      { rootMargin: "240px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingFeed, isLoadingMore, page, feedTab, searchQuery]);
 
   useEffect(() => {
     loadSidebarData();
@@ -207,7 +258,7 @@ export default function HomePage() {
     // Listen for global posts created from AppLayout
     const handleGlobalPostCreated = (e) => {
       if (e.detail) {
-        setPosts((prev) => [e.detail, ...prev]);
+        setPosts((prev) => mergeUniquePosts([e.detail], prev));
         loadSidebarData();
         setHasNewFollowing(true);
         localStorage.setItem("staple_has_new_following", "true");
@@ -221,7 +272,7 @@ export default function HomePage() {
   // 2. Debounced search effect (feed + people search)
   useEffect(() => {
     const handler = setTimeout(async () => {
-      loadFeedData();
+      loadFeedData(1);
       if (searchQuery.trim().length > 0) {
         setIsSearchingPeople(true);
         try {
@@ -689,6 +740,17 @@ export default function HomePage() {
               </button>
               <button
                 type="button"
+                onClick={() => setFeedTab("recommended")}
+                className={`rounded-full px-4 py-1.5 text-[14px] font-medium transition-all duration-150 ${
+                  feedTab === "recommended"
+                    ? "bg-white text-black shadow-xs ring-1 ring-black/5 font-semibold"
+                    : "text-[#52525b] hover:text-black"
+                }`}
+              >
+                Recommended
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   setFeedTab("following");
                   if (hasNewFollowing) {
@@ -712,8 +774,16 @@ export default function HomePage() {
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
+                aria-label="Refresh feed"
+                onClick={() => loadFeedData(1, { refresh: true })}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-[#71717a] hover:bg-[#edeae3] hover:text-black transition"
+              >
+                <RefreshCw className={`h-4 w-4 stroke-[1.8] ${isRefreshing ? "animate-spin" : ""}`} />
+              </button>
+              <button
+                type="button"
                 aria-label="Feed preferences"
-                onClick={() => showToast("Feed filtered by chronological freshness")}
+                onClick={() => showToast("For You ranks by follow affinity, recency & engagement")}
                 className="flex h-9 w-9 items-center justify-center rounded-full text-[#71717a] hover:bg-[#edeae3] hover:text-black transition"
               >
                 <SlidersHorizontal className="h-4.5 w-4.5 stroke-[1.8]" />
@@ -721,13 +791,26 @@ export default function HomePage() {
               <button
                 type="button"
                 aria-label="Curated mode"
-                onClick={loadFeedData}
+                onClick={() => loadFeedData(1, { refresh: true })}
                 className="flex h-9 w-9 items-center justify-center rounded-full text-[#71717a] hover:bg-[#edeae3] hover:text-black transition"
               >
                 <Sparkles className="h-4.5 w-4.5 stroke-[1.8]" />
               </button>
             </div>
           </div>
+
+          {hasNewPosts && (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => loadFeedData(1, { refresh: true })}
+                className="inline-flex items-center gap-2 rounded-full bg-[#1863dc] px-4 py-1.5 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-[#1557c4]"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                <span>New posts available · Tap to refresh</span>
+              </button>
+            </div>
+          )}
 
           {/* STORIES ROW */}
           <div className="rounded-[22px] border border-[#ece8de]/60 bg-white p-4 sm:p-5 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
@@ -1170,8 +1253,22 @@ export default function HomePage() {
             </div>
           )}
 
+          {/* ERROR STATE */}
+          {!isLoadingFeed && feedError && posts.length === 0 && (
+            <div className="flex flex-col items-center justify-center rounded-[22px] border border-red-200/80 bg-white p-10 text-center shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
+              <p className="text-[14px] font-semibold text-[#18181b]">{feedError}</p>
+              <button
+                type="button"
+                onClick={() => loadFeedData(1, { refresh: true })}
+                className="mt-4 rounded-full bg-black px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-neutral-800"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
           {/* EMPTY STATE (Clean Initial Database State) */}
-          {!isLoadingFeed && posts.length === 0 && (
+          {!isLoadingFeed && !feedError && posts.length === 0 && (
             <div className="flex flex-col items-center justify-center rounded-[22px] border border-[#ece8de]/60 bg-white p-10 sm:p-14 text-center shadow-[0_1px_3px_rgba(0,0,0,0.03)] animate-fade-in-slide">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#f4f2ea] text-[#71717a]">
                 {feedTab === "following" ? (
@@ -1304,6 +1401,12 @@ export default function HomePage() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {post.isSuggested && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#f4f2ea] px-2.5 py-0.5 text-[10.5px] font-semibold text-[#52525b]">
+                          <Sparkles className="h-3 w-3 text-[#1863dc]" />
+                          Suggested for you
+                        </span>
+                      )}
                       {post.badge && (
                         <span className="rounded-md bg-[#e7f7ed] px-2 py-0.5 text-[10px] font-bold tracking-wider text-[#2d7a4d]">
                           {post.badge}
@@ -1692,6 +1795,30 @@ export default function HomePage() {
                 </article>
               );
             })}
+
+          {/* INFINITE SCROLL SENTINEL & FOOTER */}
+          {!isLoadingFeed && posts.length > 0 && (
+            <div ref={loadMoreRef} className="flex flex-col items-center justify-center py-6 text-center">
+              {isLoadingMore ? (
+                <div className="flex items-center gap-2 text-[13px] font-medium text-[#71717a]">
+                  <Loader2 className="h-4 w-4 animate-spin text-[#1863dc]" />
+                  <span>Loading more posts...</span>
+                </div>
+              ) : feedError ? (
+                <button
+                  type="button"
+                  onClick={() => loadFeedData(page + 1, { append: true })}
+                  className="rounded-full border border-[#e5e2d8] bg-white px-4 py-1.5 text-[12.5px] font-semibold text-[#18181b] hover:bg-[#f4f2ea]"
+                >
+                  Retry loading more
+                </button>
+              ) : !hasMore ? (
+                <p className="text-[12.5px] font-medium text-[#71717a]">
+                  You&apos;re all caught up
+                </p>
+              ) : null}
+            </div>
+          )}
         </section>
 
         {/* RIGHT WIDGETS COLUMN (Desktop): Broad, spacious, and sticky (does NOT scroll) */}

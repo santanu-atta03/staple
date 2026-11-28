@@ -8,11 +8,17 @@ const authService = require("../modules/auth/auth.service");
 router.use(authenticate);
 
 // GET /api/v1/settings -> Full settings document isolated per user
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const userId = req.user.id;
     const settings = store.getUserSettings(userId);
     const user = store.findUser(userId);
+    const liveSessions = await authService
+      .getActiveSessions(userId, req.user.sessionId)
+      .catch(() => null);
+    if (Array.isArray(liveSessions) && settings?.account) {
+      settings.account.sessions = liveSessions;
+    }
     res.json({
       success: true,
       settings,
@@ -43,11 +49,16 @@ router.patch("/", (req, res) => {
 });
 
 // POST /api/v1/settings/avatar -> Immediately update or reset profile photo
-router.post("/avatar", (req, res) => {
+router.post("/avatar", async (req, res) => {
   try {
     const userId = req.user.id;
     const avatar = req.body.avatar || req.body.avatarUrl;
     const result = store.updateAvatar(userId, avatar);
+    const User = require("../modules/users/user.model");
+    const mongoose = require("mongoose");
+    if (mongoose.connection.readyState === 1 && mongoose.isValidObjectId(userId)) {
+      await User.findByIdAndUpdate(userId, { $set: { avatar: result.avatar } }).catch(() => {});
+    }
     try {
       const io = getIO();
       if (io) {
@@ -115,10 +126,14 @@ router.post("/password", async (req, res, next) => {
 });
 
 // POST /api/v1/settings/sessions/:id/revoke -> Revoke active session
-router.post("/sessions/:id/revoke", (req, res) => {
+router.post("/sessions/:id/revoke", async (req, res) => {
   try {
     const userId = req.user.id;
-    const sessions = store.revokeSession(userId, req.params.id);
+    await authService.revokeSessionById(userId, req.params.id).catch(() => false);
+    store.revokeSession(userId, req.params.id);
+    const sessions = await authService.getActiveSessions(userId, req.user.sessionId).catch(() =>
+      store.getUserSettings(userId).account?.sessions || []
+    );
     res.json({
       success: true,
       message: "Session revoked successfully",
@@ -130,10 +145,14 @@ router.post("/sessions/:id/revoke", (req, res) => {
 });
 
 // POST /api/v1/settings/sessions/revoke-all -> Revoke all other sessions
-router.post("/sessions/revoke-all", (req, res) => {
+router.post("/sessions/revoke-all", async (req, res) => {
   try {
     const userId = req.user.id;
-    const sessions = store.revokeAllOtherSessions(userId);
+    await authService.revokeAllSessions(userId, req.user.sessionId).catch(() => 0);
+    store.revokeAllOtherSessions(userId);
+    const sessions = await authService.getActiveSessions(userId, req.user.sessionId).catch(() =>
+      store.getUserSettings(userId).account?.sessions || []
+    );
     res.json({
       success: true,
       message: "All other sessions terminated",
