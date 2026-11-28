@@ -32,14 +32,64 @@ export const togglePostLike = async (postId) => {
   return data;
 };
 
+export const fetchPostLikes = async (postId, { page = 1, limit = 20 } = {}) => {
+  const { data } = await api.get(`/likes/${postId}?page=${page}&limit=${limit}`);
+  return {
+    users: data.users || [],
+    hasMore: Boolean(data.hasMore),
+    totalCount: data.totalCount || 0,
+    page: data.page || page,
+  };
+};
+
 export const addPostComment = async (postId, text) => {
-  const { data } = await api.post(`/comments/${postId}`, { text });
+  const { data } = await api.post(`/comments/${postId}`, { content: text, text });
   return data;
 };
 
-export const fetchPostComments = async (postId) => {
-  const { data } = await api.get(`/comments/${postId}`);
+export const fetchPostComments = async (postId, { page = 1, limit = 20, sort = "newest" } = {}) => {
+  const { data } = await api.get(`/comments/${postId}?page=${page}&limit=${limit}&sort=${sort}`);
   return data.comments || [];
+};
+
+export const fetchPostCommentsPage = async (postId, { page = 1, limit = 20, sort = "newest" } = {}) => {
+  const { data } = await api.get(`/comments/${postId}?page=${page}&limit=${limit}&sort=${sort}`);
+  return {
+    comments: data.comments || [],
+    hasMore: Boolean(data.hasMore),
+    totalCount: data.totalCount || 0,
+    page: data.page || page,
+  };
+};
+
+export const fetchCommentReplies = async (postId, commentId, { page = 1, limit = 10 } = {}) => {
+  const { data } = await api.get(`/comments/${postId}/${commentId}/replies?page=${page}&limit=${limit}`);
+  return {
+    replies: data.replies || [],
+    hasMore: Boolean(data.hasMore),
+    totalCount: data.totalCount || 0,
+    page: data.page || page,
+  };
+};
+
+export const editComment = async (commentId, content) => {
+  const { data } = await api.patch(`/comments/${commentId}`, { content });
+  return data;
+};
+
+export const toggleCommentReaction = async (commentId, type = "like") => {
+  const { data } = await api.post(`/comments/${commentId}/reaction`, { type });
+  return data;
+};
+
+export const toggleHideComment = async (commentId) => {
+  const { data } = await api.patch(`/comments/${commentId}/hide`);
+  return data;
+};
+
+export const sharePost = async (postId) => {
+  const { data } = await api.post(`/posts/${postId}/share`);
+  return data;
 };
 
 export const voteOnPoll = async (postId, optionId) => {

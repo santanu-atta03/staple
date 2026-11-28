@@ -63,6 +63,17 @@ const postSchema = new mongoose.Schema(
       min: 0,
     },
 
+    sharesCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    hideLikesCount: {
+      type: Boolean,
+      default: false,
+    },
+
     visibility: {
       type: String,
       enum: ["public", "followers", "private"],

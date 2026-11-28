@@ -3,6 +3,8 @@ const authMiddleware = require("../../middleware/auth.middleware");
 const rateLimit = require("../../middleware/rateLimit.middleware");
 const likeController = require("./like.controller");
 
+router.get("/:postId", authMiddleware.optionalAuthenticate, likeController.getLikes);
+
 router.post(
   "/:postId",
   authMiddleware,

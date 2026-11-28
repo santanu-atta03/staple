@@ -36,7 +36,7 @@ const getPost = async (req, res, next) => {
 const updatePost = async (req, res, next) => {
   try {
     const userId = req.user._id || req.user.id;
-    const { content, media, tags, location } = req.body;
+    const { content, media, tags, location, visibility, commentsDisabled, hideLikesCount } = req.body;
     const post = await postService.updatePost({
       postId: req.params.postId,
       userId,
@@ -44,6 +44,9 @@ const updatePost = async (req, res, next) => {
       media,
       tags,
       location,
+      visibility,
+      commentsDisabled,
+      hideLikesCount,
     });
     res.json({ success: true, post });
   } catch (err) {
@@ -137,6 +140,19 @@ const reportPost = async (req, res, next) => {
   }
 };
 
+const sharePost = async (req, res, next) => {
+  try {
+    const userId = req.user._id || req.user.id;
+    const result = await postService.sharePost({
+      postId: req.params.postId,
+      userId,
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createPost,
   getPost,
@@ -148,4 +164,5 @@ module.exports = {
   toggleArchivePost,
   publishDraft,
   reportPost,
+  sharePost,
 };

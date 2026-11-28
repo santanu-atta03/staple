@@ -40,6 +40,44 @@
   "drafts": [],
   "notifications": [
     {
+      "id": "notif_follow_6b0a937a2acf0fd78dd85372_1795855229333",
+      "recipientId": "6b0a93792acf0fd78dd8536e",
+      "senderId": "6b0a937a2acf0fd78dd85372",
+      "section": "today",
+      "type": "follow",
+      "unread": true,
+      "isRead": false,
+      "user": "prof_26139_c",
+      "avatar": "/default-avatar.svg",
+      "badgeType": "friend",
+      "titlePrefix": "Profile c",
+      "userName": "Profile c",
+      "titleSuffix": " started following you.",
+      "subtext": "Just now",
+      "time": "Just now",
+      "isFriendRequest": false,
+      "createdAt": "2026-11-28T08:40:29.333Z"
+    },
+    {
+      "id": "notif_follow_6b0a93792acf0fd78dd85370_1795855228405",
+      "recipientId": "6b0a93792acf0fd78dd8536e",
+      "senderId": "6b0a93792acf0fd78dd85370",
+      "section": "today",
+      "type": "follow",
+      "unread": true,
+      "isRead": false,
+      "user": "prof_25607_b",
+      "avatar": "/default-avatar.svg",
+      "badgeType": "friend",
+      "titlePrefix": "Profile b",
+      "userName": "Profile b",
+      "titleSuffix": " started following you.",
+      "subtext": "Just now",
+      "time": "Just now",
+      "isFriendRequest": false,
+      "createdAt": "2026-11-28T08:40:28.405Z"
+    },
+    {
       "id": "notif_follow_6b0a908dc5bd30fe1b05ca77_1795854480366",
       "recipientId": "6b0a908cc5bd30fe1b05ca73",
       "senderId": "6b0a908dc5bd30fe1b05ca77",
@@ -8078,6 +8116,723 @@
       },
       "closeFriends": [],
       "supportTickets": []
+    },
+    "6b0a93460b56b0ebd0618949": {
+      "account": {
+        "email": "eng_74630_1@example.com",
+        "phone": "",
+        "birthDate": "",
+        "twoFactorAuth": false,
+        "registeredKey": "None configured",
+        "sessions": [
+          {
+            "id": "sess_1795855175349",
+            "device": "Browser Session",
+            "location": "Local",
+            "time": "Active this session",
+            "isCurrent": true,
+            "type": "laptop"
+          }
+        ]
+      },
+      "profile": {
+        "displayName": "Engagement 1",
+        "username": "eng_74630_1",
+        "pronouns": "",
+        "bio": "",
+        "website": "",
+        "location": "",
+        "roleTag": "",
+        "showVerifiedBadge": false,
+        "showFollowerCount": true,
+        "showStudioSound": true,
+        "avatar": "/default-avatar.svg",
+        "cover": ""
+      },
+      "privacy": {
+        "privateAccount": false,
+        "storyReplies": "everyone",
+        "activeStatus": true,
+        "readReceipts": true,
+        "blockedUsers": [],
+        "restrictedUsers": []
+      },
+      "notifications": {
+        "pushNotifications": true,
+        "emailNotifications": true,
+        "mentions": true,
+        "peerSignals": true,
+        "directMessages": true,
+        "storyReplies": true,
+        "pauseAll": false
+      },
+      "appearance": {
+        "theme": "editorial",
+        "fontSize": "standard",
+        "highContrastBorders": false,
+        "reduceAnimations": false
+      },
+      "content": {
+        "feedQuality": "lossless",
+        "losslessAudio": true,
+        "autoplayMedia": true,
+        "sensitiveContentFilter": false,
+        "mutedWords": []
+      },
+      "closeFriends": [],
+      "supportTickets": []
+    },
+    "6b0a93470b56b0ebd061894b": {
+      "account": {
+        "email": "eng_75443_2@example.com",
+        "phone": "",
+        "birthDate": "",
+        "twoFactorAuth": false,
+        "registeredKey": "None configured",
+        "sessions": [
+          {
+            "id": "sess_1795855175927",
+            "device": "Browser Session",
+            "location": "Local",
+            "time": "Active this session",
+            "isCurrent": true,
+            "type": "laptop"
+          }
+        ]
+      },
+      "profile": {
+        "displayName": "Engagement 2",
+        "username": "eng_75443_2",
+        "pronouns": "",
+        "bio": "",
+        "website": "",
+        "location": "",
+        "roleTag": "",
+        "showVerifiedBadge": false,
+        "showFollowerCount": true,
+        "showStudioSound": true,
+        "avatar": "/default-avatar.svg",
+        "cover": ""
+      },
+      "privacy": {
+        "privateAccount": false,
+        "storyReplies": "everyone",
+        "activeStatus": true,
+        "readReceipts": true,
+        "blockedUsers": [],
+        "restrictedUsers": []
+      },
+      "notifications": {
+        "pushNotifications": true,
+        "emailNotifications": true,
+        "mentions": true,
+        "peerSignals": true,
+        "directMessages": true,
+        "storyReplies": true,
+        "pauseAll": false
+      },
+      "appearance": {
+        "theme": "editorial",
+        "fontSize": "standard",
+        "highContrastBorders": false,
+        "reduceAnimations": false
+      },
+      "content": {
+        "feedQuality": "lossless",
+        "losslessAudio": true,
+        "autoplayMedia": true,
+        "sensitiveContentFilter": false,
+        "mutedWords": []
+      },
+      "closeFriends": [],
+      "supportTickets": []
+    },
+    "6b0a93480b56b0ebd061894d": {
+      "account": {
+        "email": "eng_75999_3@example.com",
+        "phone": "",
+        "birthDate": "",
+        "twoFactorAuth": false,
+        "registeredKey": "None configured",
+        "sessions": [
+          {
+            "id": "sess_1795855176578",
+            "device": "Browser Session",
+            "location": "Local",
+            "time": "Active this session",
+            "isCurrent": true,
+            "type": "laptop"
+          }
+        ]
+      },
+      "profile": {
+        "displayName": "Engagement 3",
+        "username": "eng_75999_3",
+        "pronouns": "",
+        "bio": "",
+        "website": "",
+        "location": "",
+        "roleTag": "",
+        "showVerifiedBadge": false,
+        "showFollowerCount": true,
+        "showStudioSound": true,
+        "avatar": "/default-avatar.svg",
+        "cover": ""
+      },
+      "privacy": {
+        "privateAccount": false,
+        "storyReplies": "everyone",
+        "activeStatus": true,
+        "readReceipts": true,
+        "blockedUsers": [],
+        "restrictedUsers": []
+      },
+      "notifications": {
+        "pushNotifications": true,
+        "emailNotifications": true,
+        "mentions": true,
+        "peerSignals": true,
+        "directMessages": true,
+        "storyReplies": true,
+        "pauseAll": false
+      },
+      "appearance": {
+        "theme": "editorial",
+        "fontSize": "standard",
+        "highContrastBorders": false,
+        "reduceAnimations": false
+      },
+      "content": {
+        "feedQuality": "lossless",
+        "losslessAudio": true,
+        "autoplayMedia": true,
+        "sensitiveContentFilter": false,
+        "mutedWords": []
+      },
+      "closeFriends": [],
+      "supportTickets": []
+    },
+    "6b0a93480b56b0ebd061894f": {
+      "account": {
+        "email": "eng_76667_4@example.com",
+        "phone": "",
+        "birthDate": "",
+        "twoFactorAuth": false,
+        "registeredKey": "None configured",
+        "sessions": [
+          {
+            "id": "sess_1795855177438",
+            "device": "Browser Session",
+            "location": "Local",
+            "time": "Active this session",
+            "isCurrent": true,
+            "type": "laptop"
+          }
+        ]
+      },
+      "profile": {
+        "displayName": "Engagement 4",
+        "username": "eng_76667_4",
+        "pronouns": "",
+        "bio": "",
+        "website": "",
+        "location": "",
+        "roleTag": "",
+        "showVerifiedBadge": false,
+        "showFollowerCount": true,
+        "showStudioSound": true,
+        "avatar": "/default-avatar.svg",
+        "cover": ""
+      },
+      "privacy": {
+        "privateAccount": false,
+        "storyReplies": "everyone",
+        "activeStatus": true,
+        "readReceipts": true,
+        "blockedUsers": [],
+        "restrictedUsers": []
+      },
+      "notifications": {
+        "pushNotifications": true,
+        "emailNotifications": true,
+        "mentions": true,
+        "peerSignals": true,
+        "directMessages": true,
+        "storyReplies": true,
+        "pauseAll": false
+      },
+      "appearance": {
+        "theme": "editorial",
+        "fontSize": "standard",
+        "highContrastBorders": false,
+        "reduceAnimations": false
+      },
+      "content": {
+        "feedQuality": "lossless",
+        "losslessAudio": true,
+        "autoplayMedia": true,
+        "sensitiveContentFilter": false,
+        "mutedWords": []
+      },
+      "closeFriends": [],
+      "supportTickets": []
+    },
+    "6b0a935513add86298ad7932": {
+      "account": {
+        "email": "follow_89264_1@example.com",
+        "phone": "",
+        "birthDate": "",
+        "twoFactorAuth": false,
+        "registeredKey": "None configured",
+        "sessions": [
+          {
+            "id": "sess_1795855189796",
+            "device": "Browser Session",
+            "location": "Local",
+            "time": "Active this session",
+            "isCurrent": true,
+            "type": "laptop"
+          }
+        ]
+      },
+      "profile": {
+        "displayName": "Follow 1",
+        "username": "foll_89264_1",
+        "pronouns": "",
+        "bio": "",
+        "website": "",
+        "location": "",
+        "roleTag": "",
+        "showVerifiedBadge": false,
+        "showFollowerCount": true,
+        "showStudioSound": true,
+        "avatar": "/default-avatar.svg",
+        "cover": ""
+      },
+      "privacy": {
+        "privateAccount": false,
+        "storyReplies": "everyone",
+        "activeStatus": true,
+        "readReceipts": true,
+        "blockedUsers": [],
+        "restrictedUsers": []
+      },
+      "notifications": {
+        "pushNotifications": true,
+        "emailNotifications": true,
+        "mentions": true,
+        "peerSignals": true,
+        "directMessages": true,
+        "storyReplies": true,
+        "pauseAll": false
+      },
+      "appearance": {
+        "theme": "editorial",
+        "fontSize": "standard",
+        "highContrastBorders": false,
+        "reduceAnimations": false
+      },
+      "content": {
+        "feedQuality": "lossless",
+        "losslessAudio": true,
+        "autoplayMedia": true,
+        "sensitiveContentFilter": false,
+        "mutedWords": []
+      },
+      "closeFriends": [],
+      "supportTickets": []
+    },
+    "6b0a935613add86298ad7934": {
+      "account": {
+        "email": "follow_89900_2@example.com",
+        "phone": "",
+        "birthDate": "",
+        "twoFactorAuth": false,
+        "registeredKey": "None configured",
+        "sessions": [
+          {
+            "id": "sess_1795855190435",
+            "device": "Browser Session",
+            "location": "Local",
+            "time": "Active this session",
+            "isCurrent": true,
+            "type": "laptop"
+          }
+        ]
+      },
+      "profile": {
+        "displayName": "Follow 2",
+        "username": "foll_89900_2",
+        "pronouns": "",
+        "bio": "",
+        "website": "",
+        "location": "",
+        "roleTag": "",
+        "showVerifiedBadge": false,
+        "showFollowerCount": true,
+        "showStudioSound": true,
+        "avatar": "/default-avatar.svg",
+        "cover": ""
+      },
+      "privacy": {
+        "privateAccount": false,
+        "storyReplies": "everyone",
+        "activeStatus": true,
+        "readReceipts": true,
+        "blockedUsers": [],
+        "restrictedUsers": []
+      },
+      "notifications": {
+        "pushNotifications": true,
+        "emailNotifications": true,
+        "mentions": true,
+        "peerSignals": true,
+        "directMessages": true,
+        "storyReplies": true,
+        "pauseAll": false
+      },
+      "appearance": {
+        "theme": "editorial",
+        "fontSize": "standard",
+        "highContrastBorders": false,
+        "reduceAnimations": false
+      },
+      "content": {
+        "feedQuality": "lossless",
+        "losslessAudio": true,
+        "autoplayMedia": true,
+        "sensitiveContentFilter": false,
+        "mutedWords": []
+      },
+      "closeFriends": [],
+      "supportTickets": []
+    },
+    "6b0a935613add86298ad7936": {
+      "account": {
+        "email": "follow_90519_3@example.com",
+        "phone": "",
+        "birthDate": "",
+        "twoFactorAuth": false,
+        "registeredKey": "None configured",
+        "sessions": [
+          {
+            "id": "sess_1795855191317",
+            "device": "Browser Session",
+            "location": "Local",
+            "time": "Active this session",
+            "isCurrent": true,
+            "type": "laptop"
+          }
+        ]
+      },
+      "profile": {
+        "displayName": "Follow 3",
+        "username": "foll_90519_3",
+        "pronouns": "",
+        "bio": "",
+        "website": "",
+        "location": "",
+        "roleTag": "",
+        "showVerifiedBadge": false,
+        "showFollowerCount": true,
+        "showStudioSound": true,
+        "avatar": "/default-avatar.svg",
+        "cover": ""
+      },
+      "privacy": {
+        "privateAccount": false,
+        "storyReplies": "everyone",
+        "activeStatus": true,
+        "readReceipts": true,
+        "blockedUsers": [],
+        "restrictedUsers": []
+      },
+      "notifications": {
+        "pushNotifications": true,
+        "emailNotifications": true,
+        "mentions": true,
+        "peerSignals": true,
+        "directMessages": true,
+        "storyReplies": true,
+        "pauseAll": false
+      },
+      "appearance": {
+        "theme": "editorial",
+        "fontSize": "standard",
+        "highContrastBorders": false,
+        "reduceAnimations": false
+      },
+      "content": {
+        "feedQuality": "lossless",
+        "losslessAudio": true,
+        "autoplayMedia": true,
+        "sensitiveContentFilter": false,
+        "mutedWords": []
+      },
+      "closeFriends": [],
+      "supportTickets": []
+    },
+    "6b0a9371062f7e74cb342b4d": {
+      "account": {
+        "email": "posts_17250_1@example.com",
+        "phone": "",
+        "birthDate": "",
+        "twoFactorAuth": false,
+        "registeredKey": "None configured",
+        "sessions": [
+          {
+            "id": "sess_1795855217896",
+            "device": "Browser Session",
+            "location": "Local",
+            "time": "Active this session",
+            "isCurrent": true,
+            "type": "laptop"
+          }
+        ]
+      },
+      "profile": {
+        "displayName": "Post 1",
+        "username": "post_17250_1",
+        "pronouns": "",
+        "bio": "",
+        "website": "",
+        "location": "",
+        "roleTag": "",
+        "showVerifiedBadge": false,
+        "showFollowerCount": true,
+        "showStudioSound": true,
+        "avatar": "/default-avatar.svg",
+        "cover": ""
+      },
+      "privacy": {
+        "privateAccount": false,
+        "storyReplies": "everyone",
+        "activeStatus": true,
+        "readReceipts": true,
+        "blockedUsers": [],
+        "restrictedUsers": []
+      },
+      "notifications": {
+        "pushNotifications": true,
+        "emailNotifications": true,
+        "mentions": true,
+        "peerSignals": true,
+        "directMessages": true,
+        "storyReplies": true,
+        "pauseAll": false
+      },
+      "appearance": {
+        "theme": "editorial",
+        "fontSize": "standard",
+        "highContrastBorders": false,
+        "reduceAnimations": false
+      },
+      "content": {
+        "feedQuality": "lossless",
+        "losslessAudio": true,
+        "autoplayMedia": true,
+        "sensitiveContentFilter": false,
+        "mutedWords": []
+      },
+      "closeFriends": [],
+      "supportTickets": []
+    },
+    "6b0a93792acf0fd78dd8536e": {
+      "account": {
+        "email": "profile_25096_a@example.com",
+        "phone": "",
+        "birthDate": "",
+        "twoFactorAuth": false,
+        "registeredKey": "None configured",
+        "sessions": [
+          {
+            "id": "sess_1795855225515",
+            "device": "Browser Session",
+            "location": "Local",
+            "time": "Active this session",
+            "isCurrent": true,
+            "type": "laptop"
+          }
+        ]
+      },
+      "profile": {
+        "displayName": "Alpha Updated",
+        "username": "prof_25096_a",
+        "pronouns": "they/them",
+        "bio": "Photographer & architect",
+        "website": "https://alpha.example.com",
+        "location": "Kyoto",
+        "roleTag": "",
+        "showVerifiedBadge": false,
+        "showFollowerCount": true,
+        "showStudioSound": true,
+        "avatar": "/uploads/alpha.png",
+        "cover": "/uploads/cover.png",
+        "fullName": "Alpha Updated"
+      },
+      "privacy": {
+        "privateAccount": false,
+        "storyReplies": "everyone",
+        "activeStatus": true,
+        "readReceipts": true,
+        "blockedUsers": [],
+        "restrictedUsers": []
+      },
+      "notifications": {
+        "pushNotifications": true,
+        "emailNotifications": true,
+        "mentions": true,
+        "peerSignals": true,
+        "directMessages": true,
+        "storyReplies": true,
+        "pauseAll": false
+      },
+      "appearance": {
+        "theme": "editorial",
+        "fontSize": "standard",
+        "highContrastBorders": false,
+        "reduceAnimations": false
+      },
+      "content": {
+        "feedQuality": "lossless",
+        "losslessAudio": true,
+        "autoplayMedia": true,
+        "sensitiveContentFilter": false,
+        "mutedWords": []
+      },
+      "closeFriends": [],
+      "supportTickets": []
+    },
+    "6b0a93792acf0fd78dd85370": {
+      "account": {
+        "email": "profile_25607_b@example.com",
+        "phone": "",
+        "birthDate": "",
+        "twoFactorAuth": false,
+        "registeredKey": "None configured",
+        "sessions": [
+          {
+            "id": "sess_1795855226054",
+            "device": "Browser Session",
+            "location": "Local",
+            "time": "Active this session",
+            "isCurrent": true,
+            "type": "laptop"
+          }
+        ]
+      },
+      "profile": {
+        "displayName": "Profile b",
+        "username": "prof_25607_b",
+        "pronouns": "",
+        "bio": "",
+        "website": "",
+        "location": "",
+        "roleTag": "",
+        "showVerifiedBadge": false,
+        "showFollowerCount": true,
+        "showStudioSound": true,
+        "avatar": "/default-avatar.svg",
+        "cover": "",
+        "isPrivate": true
+      },
+      "privacy": {
+        "privateAccount": false,
+        "storyReplies": "everyone",
+        "activeStatus": true,
+        "readReceipts": true,
+        "blockedUsers": [],
+        "restrictedUsers": []
+      },
+      "notifications": {
+        "pushNotifications": true,
+        "emailNotifications": true,
+        "mentions": true,
+        "peerSignals": true,
+        "directMessages": true,
+        "storyReplies": true,
+        "pauseAll": false
+      },
+      "appearance": {
+        "theme": "editorial",
+        "fontSize": "standard",
+        "highContrastBorders": false,
+        "reduceAnimations": false
+      },
+      "content": {
+        "feedQuality": "lossless",
+        "losslessAudio": true,
+        "autoplayMedia": true,
+        "sensitiveContentFilter": false,
+        "mutedWords": []
+      },
+      "closeFriends": [],
+      "supportTickets": []
+    },
+    "6b0a937a2acf0fd78dd85372": {
+      "account": {
+        "email": "profile_26139_c@example.com",
+        "phone": "",
+        "birthDate": "",
+        "twoFactorAuth": false,
+        "registeredKey": "None configured",
+        "sessions": [
+          {
+            "id": "sess_1795855226579",
+            "device": "Browser Session",
+            "location": "Local",
+            "time": "Active this session",
+            "isCurrent": true,
+            "type": "laptop"
+          }
+        ]
+      },
+      "profile": {
+        "displayName": "Profile c",
+        "username": "prof_26139_c",
+        "pronouns": "",
+        "bio": "",
+        "website": "",
+        "location": "",
+        "roleTag": "",
+        "showVerifiedBadge": false,
+        "showFollowerCount": true,
+        "showStudioSound": true,
+        "avatar": "/default-avatar.svg",
+        "cover": ""
+      },
+      "privacy": {
+        "privateAccount": false,
+        "storyReplies": "everyone",
+        "activeStatus": true,
+        "readReceipts": true,
+        "blockedUsers": [],
+        "restrictedUsers": []
+      },
+      "notifications": {
+        "pushNotifications": true,
+        "emailNotifications": true,
+        "mentions": true,
+        "peerSignals": true,
+        "directMessages": true,
+        "storyReplies": true,
+        "pauseAll": false
+      },
+      "appearance": {
+        "theme": "editorial",
+        "fontSize": "standard",
+        "highContrastBorders": false,
+        "reduceAnimations": false
+      },
+      "content": {
+        "feedQuality": "lossless",
+        "losslessAudio": true,
+        "autoplayMedia": true,
+        "sensitiveContentFilter": false,
+        "mutedWords": []
+      },
+      "closeFriends": [],
+      "supportTickets": []
     }
   },
   "userBookmarks": {
@@ -8185,7 +8940,18 @@
     "6b0a9081a0094039566a1251": [],
     "6b0a908cc5bd30fe1b05ca73": [],
     "6b0a908cc5bd30fe1b05ca75": [],
-    "6b0a908dc5bd30fe1b05ca77": []
+    "6b0a908dc5bd30fe1b05ca77": [],
+    "6b0a93460b56b0ebd0618949": [],
+    "6b0a93470b56b0ebd061894b": [],
+    "6b0a93480b56b0ebd061894d": [],
+    "6b0a93480b56b0ebd061894f": [],
+    "6b0a935513add86298ad7932": [],
+    "6b0a935613add86298ad7934": [],
+    "6b0a935613add86298ad7936": [],
+    "6b0a9371062f7e74cb342b4d": [],
+    "6b0a93792acf0fd78dd8536e": [],
+    "6b0a93792acf0fd78dd85370": [],
+    "6b0a937a2acf0fd78dd85372": []
   },
   "userLikes": {
     "6b06c1ab44c4aad9172ba86c": [],
@@ -8292,7 +9058,18 @@
     "6b0a9081a0094039566a1251": [],
     "6b0a908cc5bd30fe1b05ca73": [],
     "6b0a908cc5bd30fe1b05ca75": [],
-    "6b0a908dc5bd30fe1b05ca77": []
+    "6b0a908dc5bd30fe1b05ca77": [],
+    "6b0a93460b56b0ebd0618949": [],
+    "6b0a93470b56b0ebd061894b": [],
+    "6b0a93480b56b0ebd061894d": [],
+    "6b0a93480b56b0ebd061894f": [],
+    "6b0a935513add86298ad7932": [],
+    "6b0a935613add86298ad7934": [],
+    "6b0a935613add86298ad7936": [],
+    "6b0a9371062f7e74cb342b4d": [],
+    "6b0a93792acf0fd78dd8536e": [],
+    "6b0a93792acf0fd78dd85370": [],
+    "6b0a937a2acf0fd78dd85372": []
   },
   "userFollowing": {
     "6b06c1ab44c4aad9172ba86c": [
@@ -8497,6 +9274,21 @@
     ],
     "6b0a908dc5bd30fe1b05ca77": [
       "6b0a908cc5bd30fe1b05ca73"
+    ],
+    "6b0a93460b56b0ebd0618949": [],
+    "6b0a93470b56b0ebd061894b": [],
+    "6b0a93480b56b0ebd061894d": [],
+    "6b0a93480b56b0ebd061894f": [],
+    "6b0a935513add86298ad7932": [],
+    "6b0a935613add86298ad7934": [],
+    "6b0a935613add86298ad7936": [],
+    "6b0a9371062f7e74cb342b4d": [],
+    "6b0a93792acf0fd78dd8536e": [],
+    "6b0a93792acf0fd78dd85370": [
+      "6b0a93792acf0fd78dd8536e"
+    ],
+    "6b0a937a2acf0fd78dd85372": [
+      "6b0a93792acf0fd78dd8536e"
     ]
   },
   "userHighlights": {
@@ -8604,7 +9396,18 @@
     "6b0a9081a0094039566a1251": [],
     "6b0a908cc5bd30fe1b05ca73": [],
     "6b0a908cc5bd30fe1b05ca75": [],
-    "6b0a908dc5bd30fe1b05ca77": []
+    "6b0a908dc5bd30fe1b05ca77": [],
+    "6b0a93460b56b0ebd0618949": [],
+    "6b0a93470b56b0ebd061894b": [],
+    "6b0a93480b56b0ebd061894d": [],
+    "6b0a93480b56b0ebd061894f": [],
+    "6b0a935513add86298ad7932": [],
+    "6b0a935613add86298ad7934": [],
+    "6b0a935613add86298ad7936": [],
+    "6b0a9371062f7e74cb342b4d": [],
+    "6b0a93792acf0fd78dd8536e": [],
+    "6b0a93792acf0fd78dd85370": [],
+    "6b0a937a2acf0fd78dd85372": []
   },
   "userNotes": {
     "6b06c1ab44c4aad9172ba86c": null,
@@ -8714,7 +9517,18 @@
     "6b0a9081a0094039566a1251": null,
     "6b0a908cc5bd30fe1b05ca73": null,
     "6b0a908cc5bd30fe1b05ca75": null,
-    "6b0a908dc5bd30fe1b05ca77": null
+    "6b0a908dc5bd30fe1b05ca77": null,
+    "6b0a93460b56b0ebd0618949": null,
+    "6b0a93470b56b0ebd061894b": null,
+    "6b0a93480b56b0ebd061894d": null,
+    "6b0a93480b56b0ebd061894f": null,
+    "6b0a935513add86298ad7932": null,
+    "6b0a935613add86298ad7934": null,
+    "6b0a935613add86298ad7936": null,
+    "6b0a9371062f7e74cb342b4d": null,
+    "6b0a93792acf0fd78dd8536e": null,
+    "6b0a93792acf0fd78dd85370": null,
+    "6b0a937a2acf0fd78dd85372": null
   },
   "users": [
     {
@@ -10816,6 +11630,226 @@
       "followingCount": 1,
       "followersCount": 0,
       "postsCount": 0
+    },
+    {
+      "_id": "6b0a93460b56b0ebd0618949",
+      "id": "6b0a93460b56b0ebd0618949",
+      "username": "eng_74630_1",
+      "email": "eng_74630_1@example.com",
+      "name": "Engagement 1",
+      "fullName": "Engagement 1",
+      "avatar": "/default-avatar.svg",
+      "fallbackAvatar": "/default-avatar.svg",
+      "emailVerified": true,
+      "isPrivate": false,
+      "bio": "",
+      "website": "",
+      "location": "",
+      "pronouns": "",
+      "cover": "",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0
+    },
+    {
+      "_id": "6b0a93470b56b0ebd061894b",
+      "id": "6b0a93470b56b0ebd061894b",
+      "username": "eng_75443_2",
+      "email": "eng_75443_2@example.com",
+      "name": "Engagement 2",
+      "fullName": "Engagement 2",
+      "avatar": "/default-avatar.svg",
+      "fallbackAvatar": "/default-avatar.svg",
+      "emailVerified": true,
+      "isPrivate": false,
+      "bio": "",
+      "website": "",
+      "location": "",
+      "pronouns": "",
+      "cover": "",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0
+    },
+    {
+      "_id": "6b0a93480b56b0ebd061894d",
+      "id": "6b0a93480b56b0ebd061894d",
+      "username": "eng_75999_3",
+      "email": "eng_75999_3@example.com",
+      "name": "Engagement 3",
+      "fullName": "Engagement 3",
+      "avatar": "/default-avatar.svg",
+      "fallbackAvatar": "/default-avatar.svg",
+      "emailVerified": true,
+      "isPrivate": false,
+      "bio": "",
+      "website": "",
+      "location": "",
+      "pronouns": "",
+      "cover": "",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0
+    },
+    {
+      "_id": "6b0a93480b56b0ebd061894f",
+      "id": "6b0a93480b56b0ebd061894f",
+      "username": "eng_76667_4",
+      "email": "eng_76667_4@example.com",
+      "name": "Engagement 4",
+      "fullName": "Engagement 4",
+      "avatar": "/default-avatar.svg",
+      "fallbackAvatar": "/default-avatar.svg",
+      "emailVerified": true,
+      "isPrivate": true,
+      "bio": "",
+      "website": "",
+      "location": "",
+      "pronouns": "",
+      "cover": "",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0
+    },
+    {
+      "_id": "6b0a935513add86298ad7932",
+      "id": "6b0a935513add86298ad7932",
+      "username": "foll_89264_1",
+      "email": "follow_89264_1@example.com",
+      "name": "Follow 1",
+      "fullName": "Follow 1",
+      "avatar": "/default-avatar.svg",
+      "fallbackAvatar": "/default-avatar.svg",
+      "emailVerified": true,
+      "isPrivate": false,
+      "bio": "",
+      "website": "",
+      "location": "",
+      "pronouns": "",
+      "cover": "",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0
+    },
+    {
+      "_id": "6b0a935613add86298ad7934",
+      "id": "6b0a935613add86298ad7934",
+      "username": "foll_89900_2",
+      "email": "follow_89900_2@example.com",
+      "name": "Follow 2",
+      "fullName": "Follow 2",
+      "avatar": "/default-avatar.svg",
+      "fallbackAvatar": "/default-avatar.svg",
+      "emailVerified": true,
+      "isPrivate": false,
+      "bio": "",
+      "website": "",
+      "location": "",
+      "pronouns": "",
+      "cover": "",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0
+    },
+    {
+      "_id": "6b0a935613add86298ad7936",
+      "id": "6b0a935613add86298ad7936",
+      "username": "foll_90519_3",
+      "email": "follow_90519_3@example.com",
+      "name": "Follow 3",
+      "fullName": "Follow 3",
+      "avatar": "/default-avatar.svg",
+      "fallbackAvatar": "/default-avatar.svg",
+      "emailVerified": true,
+      "isPrivate": false,
+      "bio": "",
+      "website": "",
+      "location": "",
+      "pronouns": "",
+      "cover": "",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0
+    },
+    {
+      "_id": "6b0a9371062f7e74cb342b4d",
+      "id": "6b0a9371062f7e74cb342b4d",
+      "username": "post_17250_1",
+      "email": "posts_17250_1@example.com",
+      "name": "Post 1",
+      "fullName": "Post 1",
+      "avatar": "/default-avatar.svg",
+      "fallbackAvatar": "/default-avatar.svg",
+      "emailVerified": true,
+      "isPrivate": false,
+      "bio": "",
+      "website": "",
+      "location": "",
+      "pronouns": "",
+      "cover": "",
+      "followingCount": 0,
+      "followersCount": 0,
+      "postsCount": 0
+    },
+    {
+      "_id": "6b0a93792acf0fd78dd8536e",
+      "id": "6b0a93792acf0fd78dd8536e",
+      "username": "prof_25096_a",
+      "email": "profile_25096_a@example.com",
+      "name": "Alpha Updated",
+      "fullName": "Alpha Updated",
+      "avatar": "/uploads/alpha.png",
+      "fallbackAvatar": "/uploads/alpha.png",
+      "emailVerified": true,
+      "isPrivate": false,
+      "bio": "Photographer & architect",
+      "website": "https://alpha.example.com",
+      "location": "Kyoto",
+      "pronouns": "they/them",
+      "cover": "/uploads/cover.png",
+      "followingCount": 0,
+      "followersCount": 2,
+      "postsCount": 0
+    },
+    {
+      "_id": "6b0a93792acf0fd78dd85370",
+      "id": "6b0a93792acf0fd78dd85370",
+      "username": "prof_25607_b",
+      "email": "profile_25607_b@example.com",
+      "name": "Profile b",
+      "fullName": "Profile b",
+      "avatar": "/default-avatar.svg",
+      "fallbackAvatar": "/default-avatar.svg",
+      "emailVerified": true,
+      "isPrivate": false,
+      "bio": "",
+      "website": "",
+      "location": "",
+      "pronouns": "",
+      "cover": "",
+      "followingCount": 1,
+      "followersCount": 0,
+      "postsCount": 0
+    },
+    {
+      "_id": "6b0a937a2acf0fd78dd85372",
+      "id": "6b0a937a2acf0fd78dd85372",
+      "username": "prof_26139_c",
+      "email": "profile_26139_c@example.com",
+      "name": "Profile c",
+      "fullName": "Profile c",
+      "avatar": "/default-avatar.svg",
+      "fallbackAvatar": "/default-avatar.svg",
+      "emailVerified": true,
+      "isPrivate": false,
+      "bio": "",
+      "website": "",
+      "location": "",
+      "pronouns": "",
+      "cover": "",
+      "followingCount": 1,
+      "followersCount": 0,
+      "postsCount": 0
     }
   ],
   "userNotificationSidebars": {
@@ -11828,6 +12862,102 @@
       ]
     },
     "6b0a908cc5bd30fe1b05ca75": {
+      "friendRequests": [],
+      "birthdays": [],
+      "suggestedFriends": [
+        {
+          "id": "6b06c1ab44c4aad9172ba86c",
+          "name": "San Att",
+          "username": "satt33376",
+          "subtitle": "@satt33376",
+          "avatar": "/default-avatar.svg",
+          "isFollowing": false,
+          "status": "idle"
+        },
+        {
+          "id": "6b06f639374d8c6aed83723c",
+          "name": "utyfftucdx",
+          "username": "sfdavg",
+          "subtitle": "@sfdavg",
+          "avatar": "/default-avatar.svg",
+          "isFollowing": false,
+          "status": "idle"
+        },
+        {
+          "id": "6b0a6a2d910801b9728137f3",
+          "name": "Alpha Updated",
+          "username": "prof_53645_a",
+          "subtitle": "@prof_53645_a",
+          "avatar": "/uploads/alpha.png",
+          "isFollowing": false,
+          "status": "idle"
+        },
+        {
+          "id": "6b0a6a2f910801b9728137f5",
+          "name": "Profile b",
+          "username": "prof_55018_b",
+          "subtitle": "@prof_55018_b",
+          "avatar": "/default-avatar.svg",
+          "isFollowing": false,
+          "status": "idle"
+        },
+        {
+          "id": "6b0a6a2f910801b9728137f7",
+          "name": "Profile c",
+          "username": "prof_55571_c",
+          "subtitle": "@prof_55571_c",
+          "avatar": "/default-avatar.svg",
+          "isFollowing": false,
+          "status": "idle"
+        },
+        {
+          "id": "6b0a73eb625b39eb170f4589",
+          "name": "Alpha Updated",
+          "username": "prof_46758_a",
+          "subtitle": "@prof_46758_a",
+          "avatar": "/uploads/alpha.png",
+          "isFollowing": false,
+          "status": "idle"
+        },
+        {
+          "id": "6b0a73eb625b39eb170f458b",
+          "name": "Profile b",
+          "username": "prof_47653_b",
+          "subtitle": "@prof_47653_b",
+          "avatar": "/default-avatar.svg",
+          "isFollowing": false,
+          "status": "idle"
+        },
+        {
+          "id": "6b0a73ec625b39eb170f458d",
+          "name": "Profile c",
+          "username": "prof_48274_c",
+          "subtitle": "@prof_48274_c",
+          "avatar": "/default-avatar.svg",
+          "isFollowing": false,
+          "status": "idle"
+        },
+        {
+          "id": "6b0a740ee4298aba21c66b05",
+          "name": "Auth Test User",
+          "username": "authtest_181082",
+          "subtitle": "@authtest_181082",
+          "avatar": "/default-avatar.svg",
+          "isFollowing": false,
+          "status": "idle"
+        },
+        {
+          "id": "6b0a745466d42a86ad0b1eff",
+          "name": "Alpha Updated",
+          "username": "prof_51971_a",
+          "subtitle": "@prof_51971_a",
+          "avatar": "/uploads/alpha.png",
+          "isFollowing": false,
+          "status": "idle"
+        }
+      ]
+    },
+    "6b0a93792acf0fd78dd85370": {
       "friendRequests": [],
       "birthdays": [],
       "suggestedFriends": [

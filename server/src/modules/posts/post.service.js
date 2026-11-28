@@ -136,7 +136,7 @@ const getPostById = async (postId, viewerId = null) => {
   return { source: "db", post };
 };
 
-const updatePost = async ({ postId, userId, content, media, tags, location }) => {
+const updatePost = async ({ postId, userId, content, media, tags, location, visibility, commentsDisabled, hideLikesCount }) => {
   const post = await Post.findById(postId);
   if (!post) {
     const err = new Error("Post not found");
@@ -154,10 +154,42 @@ const updatePost = async ({ postId, userId, content, media, tags, location }) =>
   if (media !== undefined) post.media = media;
   if (tags !== undefined) post.tags = tags;
   if (location !== undefined) post.location = location;
+  if (visibility !== undefined && ["public", "followers", "private"].includes(visibility)) {
+    post.visibility = visibility;
+  }
+  if (commentsDisabled !== undefined) post.commentsDisabled = Boolean(commentsDisabled);
+  if (hideLikesCount !== undefined) post.hideLikesCount = Boolean(hideLikesCount);
   await post.save();
 
   await redis.del(`post:${postId}`);
   return post.populate("authorId", "username name avatar");
+};
+
+const sharePost = async ({ postId, userId }) => {
+  const post = await Post.findById(postId)
+    .select("authorId visibility isDeleted isDraft isArchived sharesCount")
+    .lean();
+  if (!post || post.isDeleted || post.isDraft || !(await canViewPost(post, userId))) {
+    const err = new Error("Post not found");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  if (post.visibility === "private" && post.authorId.toString() !== userId.toString()) {
+    const err = new Error("Private posts cannot be shared");
+    err.statusCode = 403;
+    throw err;
+  }
+
+  const updated = await Post.findByIdAndUpdate(
+    postId,
+    { $inc: { sharesCount: 1 } },
+    { new: true }
+  )
+    .select("sharesCount")
+    .lean();
+  await redis.del(`post:${postId}`);
+  return { sharesCount: updated?.sharesCount || 0 };
 };
 
 const deletePost = async ({ postId, userId }) => {
@@ -276,5 +308,6 @@ module.exports = {
   getUserArchived,
   toggleArchivePost,
   publishDraft,
+  sharePost,
   canViewPost,
 };

@@ -28,6 +28,45 @@ const commentSchema = new mongoose.Schema(
       default: null,
     },
 
+    likesCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    repliesCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    mentions: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    hashtags: {
+      type: [String],
+      default: [],
+    },
+
+    isEdited: {
+      type: Boolean,
+      default: false,
+    },
+
+    editedAt: {
+      type: Date,
+      default: null,
+    },
+
+    isHidden: {
+      type: Boolean,
+      default: false,
+    },
+
     isDeleted: {
       type: Boolean,
       default: false,
@@ -40,6 +79,7 @@ const commentSchema = new mongoose.Schema(
 
 commentSchema.index({
   postId: 1,
+  parentCommentId: 1,
   createdAt: -1,
   _id: -1,
 });

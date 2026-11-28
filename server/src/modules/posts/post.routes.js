@@ -11,6 +11,7 @@ router.get("/:postId", authMiddleware.optionalAuthenticate, postController.getPo
 router.patch("/:postId", authMiddleware, postController.updatePost);
 router.post("/:postId/archive", authMiddleware, postController.toggleArchivePost);
 router.post("/:postId/publish", authMiddleware, postController.publishDraft);
+router.post("/:postId/share", authMiddleware, postController.sharePost);
 router.post("/:postId/report", authMiddleware, postController.reportPost);
 router.delete("/:postId", authMiddleware, postController.deletePost);
 
