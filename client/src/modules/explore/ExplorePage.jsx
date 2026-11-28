@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Search,
   SlidersHorizontal,
@@ -32,6 +33,7 @@ import {
   toggleFollowCreator,
   toggleJoinCommunity,
 } from "./explore.api";
+import { searchPeople, sendFriendRequestApi } from "../Home/home.api";
 import { audioEngine } from "./audioPlayer";
 import ExplorePostModal from "./ExplorePostModal";
 import ExploreFilterModal from "./ExploreFilterModal";
@@ -49,11 +51,17 @@ const categories = [
 
 export default function ExplorePage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState("for-you");
   const [activeView, setActiveView] = useState("all"); // 'all' | 'photos' | 'reels'
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("trending");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+
+  // People search state
+  const [matchingPeople, setMatchingPeople] = useState([]);
+  const [isSearchingPeople, setIsSearchingPeople] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   // Dynamic Feed & Sidebar states from Database
   const [items, setItems] = useState([]);
@@ -139,11 +147,44 @@ export default function ExplorePage() {
       isInitialMount.current = false;
       return;
     }
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       loadExploreData(false);
+      if (searchQuery.trim().length > 0) {
+        setIsSearchingPeople(true);
+        try {
+          const results = await searchPeople(searchQuery.trim());
+          setMatchingPeople(results);
+        } catch (err) {
+          console.warn("Failed to search people on explore:", err);
+          setMatchingPeople([]);
+        } finally {
+          setIsSearchingPeople(false);
+        }
+      } else {
+        setMatchingPeople([]);
+      }
     }, 280);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  const handleSendFriendRequest = async (person, e) => {
+    e.stopPropagation();
+    try {
+      const res = await sendFriendRequestApi(person.id);
+      const newStatus = res.status || "added";
+      setMatchingPeople((prev) =>
+        prev.map((p) => (p.id === person.id ? { ...p, friendStatus: newStatus } : p))
+      );
+      showToast(
+        newStatus === "added"
+          ? `Friend request sent to @${person.username}!`
+          : `Friend request cancelled`
+      );
+    } catch (err) {
+      console.error("Failed to send friend request:", err);
+      showToast("Could not send friend request");
+    }
+  };
 
   // Handler: Double-Click Like with Flying Heart Animation
   const handleItemDoubleClick = async (postId, e) => {
@@ -494,40 +535,113 @@ export default function ExplorePage() {
         {/* CENTER COLUMN: Search + Category Tags + Explore Feed - ONLY THIS SCROLLS */}
         <section className="w-full flex-1 max-w-[700px] xl:max-w-[740px] space-y-3.5 lg:h-screen lg:overflow-y-auto no-scrollbar pt-2 pb-28">
           {/* TOP SEARCH BAR (Spans broad across the feed) */}
-          <div className="relative flex items-center justify-between rounded-full border border-[#ece8de]/70 bg-white px-4 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] focus-within:ring-1 focus-within:ring-[#1863dc]">
-            <div className="flex flex-1 items-center gap-3">
-              <Search className="h-4.5 w-4.5 text-[#71717a]" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search photos, creators, reels, places, and tags..."
-                className="w-full bg-transparent text-[13px] text-[#18181b] placeholder-[#71717a] outline-none"
-              />
-              {searchQuery && (
+          <div className="relative">
+            <div className="relative flex items-center justify-between rounded-full border border-[#ece8de]/70 bg-white px-4 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] focus-within:ring-1 focus-within:ring-[#1863dc]">
+              <div className="flex flex-1 items-center gap-3">
+                <Search className="h-4.5 w-4.5 text-[#71717a]" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setIsSearchFocused(false), 250)}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search photos, creators, reels, places, and tags..."
+                  className="w-full bg-transparent text-[13px] text-[#18181b] placeholder-[#71717a] outline-none"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setMatchingPeople([]);
+                    }}
+                    className="text-[#71717a] hover:text-black mr-2"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 text-[#71717a]">
+                <kbd className="hidden rounded bg-[#f0eee9] px-2 py-0.5 font-mono text-[10.5px] text-[#71717a] sm:inline-block">
+                  ⌘K
+                </kbd>
                 <button
                   type="button"
-                  onClick={() => setSearchQuery("")}
-                  className="text-[#71717a] hover:text-black mr-2"
+                  onClick={() => setShowFilterModal(true)}
+                  aria-label="Filter"
+                  className="rounded-full p-1 text-[#71717a] hover:bg-[#f0eee9] hover:text-black transition"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <SlidersHorizontal className="h-4 w-4" />
                 </button>
-              )}
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 text-[#71717a]">
-              <kbd className="hidden rounded bg-[#f0eee9] px-2 py-0.5 font-mono text-[10.5px] text-[#71717a] sm:inline-block">
-                ⌘K
-              </kbd>
-              <button
-                type="button"
-                onClick={() => setShowFilterModal(true)}
-                aria-label="Filter"
-                className="rounded-full p-1 text-[#71717a] hover:bg-[#f0eee9] hover:text-black transition"
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-              </button>
-            </div>
+            {/* People search results dropdown on Explore */}
+            {searchQuery.trim().length > 0 && isSearchFocused && (
+              <div className="absolute top-12 inset-x-0 z-40 max-h-80 overflow-y-auto rounded-2xl border border-[#ece8de] bg-white p-2 shadow-2xl animate-fade-in no-scrollbar">
+                <div className="px-3 py-1.5 text-[11px] font-semibold tracking-wider text-neutral-400 uppercase">
+                  Matching People & Creators
+                </div>
+                {isSearchingPeople ? (
+                  <div className="flex items-center justify-center p-4 text-xs text-neutral-400">
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Searching people...
+                  </div>
+                ) : matchingPeople.length > 0 ? (
+                  <div className="space-y-1">
+                    {matchingPeople.map((person) => (
+                      <div
+                        key={person.id}
+                        onMouseDown={() => navigate(`/profile/${person.username}`)}
+                        className="flex items-center justify-between gap-3 p-2 rounded-xl hover:bg-[#faf9f5] cursor-pointer transition"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <img
+                            src={person.avatar}
+                            alt={person.name}
+                            onError={(e) => {
+                              e.target.src = "/default-avatar.svg";
+                            }}
+                            className="h-8 w-8 rounded-full object-cover shrink-0 ring-1 ring-black/5"
+                          />
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-neutral-900 truncate">
+                              {person.name}
+                            </p>
+                            <p className="text-[11.5px] text-neutral-500 truncate">
+                              @{person.username}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onMouseDown={(e) => handleSendFriendRequest(person, e)}
+                          className={`rounded-full px-3 py-1 text-xs font-semibold shrink-0 transition active:scale-95 ${
+                            person.friendStatus === "friends"
+                              ? "bg-[#b8ede0] text-[#00201b]"
+                              : person.friendStatus === "added"
+                              ? "bg-[#b8ede0] text-[#00201b]"
+                              : "bg-[#f0eee9] text-[#1b1c19] hover:bg-black hover:text-white"
+                          }`}
+                        >
+                          {person.friendStatus === "friends"
+                            ? "Friends"
+                            : person.friendStatus === "added"
+                            ? "Requested"
+                            : "Add Friend"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-3 text-center text-xs text-neutral-500">
+                    No people found matching "{searchQuery}"
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* HORIZONTAL CATEGORY TAGS SCROLLER */}

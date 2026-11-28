@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   Camera,
   SlidersHorizontal,
@@ -17,6 +17,7 @@ import {
   Layers,
   Heart,
   MessageCircle,
+  MessageSquare,
   UserPlus,
   UserCheck,
 } from "lucide-react";
@@ -30,6 +31,7 @@ import {
   createUserHighlight,
   toggleFollowUser,
 } from "./profile.api";
+import { createConversation } from "../messages/messages.api";
 import { updateAvatar } from "../settings/settings.api";
 import EditProfileModal from "./EditProfileModal";
 import FollowersModal from "./FollowersModal";
@@ -50,6 +52,7 @@ export default function ProfilePage() {
 function ProfilePageContent({ currentUsername }) {
   const { socket } = useSocket();
   const { user: authUser, setUser } = useAuth();
+  const navigate = useNavigate();
 
   const isSelf = Boolean(
     authUser &&
@@ -193,12 +196,15 @@ function ProfilePageContent({ currentUsername }) {
       }
     };
 
-    const handleFollowUpdated = ({ targetUsername, isFollowing, followersCount }) => {
-      if (targetUsername === currentUsername) {
+    const handleFollowUpdated = ({ targetUsername, isFollowing, followersCount, followingCount }) => {
+      const cleanTarget = (targetUsername || "").toLowerCase();
+      const cleanCurrent = (currentUsername || "").toLowerCase();
+      if (!targetUsername || cleanTarget === cleanCurrent) {
         setProfileData((prev) => ({
           ...prev,
-          isFollowing,
+          ...(typeof isFollowing === "boolean" ? { isFollowing } : {}),
           followersCount: followersCount ?? prev.followersCount,
+          followingCount: followingCount ?? prev.followingCount,
         }));
       }
     };
@@ -209,11 +215,25 @@ function ProfilePageContent({ currentUsername }) {
       }
     };
 
+    // DOM event listener for instantaneous local follow updates across tabs/components
+    const handleDomFollowUpdated = (e) => {
+      const detail = e.detail;
+      if (detail && (!detail.username || detail.username.toLowerCase() === currentUsername.toLowerCase())) {
+        setProfileData((prev) => ({
+          ...prev,
+          ...(typeof detail.isFollowing === "boolean" ? { isFollowing: detail.isFollowing } : {}),
+          followersCount: detail.followersCount ?? (detail.isFollowing ? (prev.followersCount || 0) + 1 : Math.max(0, (prev.followersCount || 1) - 1)),
+        }));
+      }
+    };
+    window.addEventListener("staple:follow_updated", handleDomFollowUpdated);
+
     socket.on("user:updated", handleUserUpdated);
     socket.on("follow:updated", handleFollowUpdated);
     socket.on("highlight:created", handleHighlightCreated);
 
     return () => {
+      window.removeEventListener("staple:follow_updated", handleDomFollowUpdated);
       socket.off("user:updated", handleUserUpdated);
       socket.off("follow:updated", handleFollowUpdated);
       socket.off("highlight:created", handleHighlightCreated);
@@ -227,12 +247,37 @@ function ProfilePageContent({ currentUsername }) {
       setProfileData((prev) => ({
         ...prev,
         isFollowing: res.isFollowing,
-        followersCount: res.followersCount || prev.followersCount,
+        followersCount: res.followersCount ?? prev.followersCount,
       }));
+      window.dispatchEvent(
+        new CustomEvent("staple:follow_updated", {
+          detail: {
+            username: currentUsername,
+            isFollowing: res.isFollowing,
+            followersCount: res.followersCount,
+          },
+        })
+      );
       showToast(res.isFollowing ? `Following @${currentUsername}` : `Unfollowed @${currentUsername}`);
     } catch (err) {
       console.error("Failed to toggle follow:", err);
       showToast("Could not update follow status");
+    }
+  };
+
+  // Start direct message conversation from profile (Instagram-style)
+  const handleStartMessage = async () => {
+    const targetId = profileData._id || profileData.id;
+    if (!targetId) {
+      navigate("/messages");
+      return;
+    }
+    try {
+      const conv = await createConversation({ userId: targetId });
+      navigate("/messages", { state: { conversationId: conv?.id } });
+    } catch (err) {
+      console.error("Failed to start conversation:", err);
+      showToast("Could not open conversation");
     }
   };
 
@@ -433,13 +478,14 @@ function ProfilePageContent({ currentUsername }) {
                       )}
                     </button>
 
-                    <Link
-                      to="/messages"
-                      className="flex items-center gap-1.5 rounded-full bg-[#f0eee9] px-4 py-2 text-xs sm:text-[13px] font-semibold text-[#1b1c19] hover:bg-[#e4e2dd] transition active:scale-95"
+                    <button
+                      type="button"
+                      onClick={handleStartMessage}
+                      className="flex items-center gap-1.5 rounded-full bg-[#f0eee9] px-4 py-2 text-xs sm:text-[13px] font-semibold text-[#1b1c19] hover:bg-[#e4e2dd] transition active:scale-95 cursor-pointer"
                     >
                       <MessageSquare className="h-3.5 w-3.5" />
                       <span>Message</span>
-                    </Link>
+                    </button>
                   </>
                 )}
 

@@ -70,6 +70,16 @@ export const toggleGroupMembership = async (groupId) => {
   return data.group;
 };
 
+export const searchPeople = async (query = "") => {
+  const { data } = await api.get(`/search/people?q=${encodeURIComponent(query)}`);
+  return data.people || [];
+};
+
+export const sendFriendRequestApi = async (userId) => {
+  const { data } = await api.post(`/notifications/sidebar/suggested/${userId}/toggle`);
+  return data;
+};
+
 export const uploadNewStory = async ({ caption, mediaUrl }) => {
   const { data } = await api.post("/stories", { caption, mediaUrl });
   return data.story;

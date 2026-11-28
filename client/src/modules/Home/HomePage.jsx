@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Search,
   SlidersHorizontal,
@@ -60,7 +60,9 @@ import {
   toggleFollowPerson,
   toggleGroupMembership,
   uploadMediaFiles,
+  searchPeople,
 } from "./home.api";
+import { toggleFollowUser } from "../users/profile.api";
 
 import StoryViewerModal from "./StoryViewerModal";
 import StoryUploadModal from "./StoryUploadModal";
@@ -71,9 +73,14 @@ import DeletePostModal from "./DeletePostModal";
 
 export default function HomePage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [feedTab, setFeedTab] = useState("for-you");
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoadingFeed, setIsLoadingFeed] = useState(true);
+
+  // People search state
+  const [matchingPeople, setMatchingPeople] = useState([]);
+  const [isSearchingPeople, setIsSearchingPeople] = useState(false);
 
   // Dynamic posts fetched strictly from backend database
   const [posts, setPosts] = useState([]);
@@ -211,14 +218,55 @@ export default function HomePage() {
     return () => window.removeEventListener("staple:post_created", handleGlobalPostCreated);
   }, []);
 
-  // 2. Debounced search effect
+  // 2. Debounced search effect (feed + people search)
   useEffect(() => {
-    const handler = setTimeout(() => {
+    const handler = setTimeout(async () => {
       loadFeedData();
+      if (searchQuery.trim().length > 0) {
+        setIsSearchingPeople(true);
+        try {
+          const results = await searchPeople(searchQuery.trim());
+          setMatchingPeople(results);
+        } catch (err) {
+          console.warn("Failed to search people:", err);
+          setMatchingPeople([]);
+        } finally {
+          setIsSearchingPeople(false);
+        }
+      } else {
+        setMatchingPeople([]);
+      }
     }, 280);
 
     return () => clearTimeout(handler);
   }, [searchQuery]);
+
+  const handleSendFriendRequest = async (person, e) => {
+    e.stopPropagation();
+    try {
+      const res = await toggleFollowUser(person.username);
+      const isNowFollowing = Boolean(res.isFollowing);
+      setMatchingPeople((prev) =>
+        prev.map((p) =>
+          p.id === person.id
+            ? {
+                ...p,
+                isFollowing: isNowFollowing,
+                friendStatus: isNowFollowing ? "friends" : "idle",
+              }
+            : p
+        )
+      );
+      showToast(
+        isNowFollowing
+          ? `Following @${person.username}`
+          : `Unfollowed @${person.username}`
+      );
+    } catch (err) {
+      console.error("Failed to toggle follow:", err);
+      showToast("Could not update follow status");
+    }
+  };
 
   // Handler: Real File Upload (Cloudinary / Backend Storage)
   const handleMediaUpload = async (e) => {
@@ -734,19 +782,22 @@ export default function HomePage() {
                     className="group flex shrink-0 cursor-pointer flex-col items-center gap-1.5"
                   >
                     <div
-                      className={`flex h-15 w-15 items-center justify-center rounded-full p-[2.5px] transition group-hover:scale-105 ${
+                      className={`relative flex h-15 w-15 items-center justify-center rounded-full p-[2.5px] transition duration-200 group-hover:scale-105 ${
                         story.isViewed
-                          ? "ring-2 ring-[#e4e0d6]"
-                          : "bg-gradient-to-tr from-[#f59e0b] via-[#ec4899] to-[#8b5cf6]"
+                          ? "ring-2 ring-[#e4e0d6] bg-transparent"
+                          : "bg-gradient-to-br from-[#da5c40] via-[#b8462c] to-[#18181b] shadow-xs"
                       }`}
                     >
-                      <div className="h-full w-full rounded-full bg-white p-[1.5px]">
+                      <div className="h-full w-full rounded-full bg-[#fbf9f4] p-[2px]">
                         <img
                           src={story.avatar || "/default-avatar.svg"}
                           alt={story.name}
                           className="h-full w-full rounded-full object-cover"
                         />
                       </div>
+                      {!story.isViewed && (
+                        <span className="absolute -bottom-0.5 right-0.5 h-3 w-3 rounded-full bg-[#da5c40] ring-2 ring-[#fbf9f4]" />
+                      )}
                     </div>
                     <span className="max-w-18 truncate text-[12px] font-medium text-[#27272a]">
                       {story.name}
@@ -1653,7 +1704,7 @@ export default function HomePage() {
                 type="text"
                 value={searchQuery}
                 onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
+                onBlur={() => setTimeout(() => setIsSearchFocused(false), 250)}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search friends, reels, places..."
                 className="ml-2.5 w-full bg-transparent text-[13px] text-[#18181b] placeholder-[#71717a] outline-none"
@@ -1661,7 +1712,10 @@ export default function HomePage() {
               {searchQuery ? (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery("")}
+                  onClick={() => {
+                    setSearchQuery("");
+                    setMatchingPeople([]);
+                  }}
                   className="text-[#71717a] hover:text-black"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -1672,6 +1726,72 @@ export default function HomePage() {
                 </kbd>
               )}
             </div>
+
+            {/* People search results dropdown */}
+            {searchQuery.trim().length > 0 && isSearchFocused && (
+              <div className="absolute top-12 inset-x-0 z-40 max-h-80 overflow-y-auto rounded-2xl border border-[#ece8de] bg-white p-2 shadow-2xl animate-fade-in no-scrollbar">
+                <div className="px-3 py-1.5 text-[11px] font-semibold tracking-wider text-neutral-400 uppercase">
+                  People & Accounts
+                </div>
+                {isSearchingPeople ? (
+                  <div className="flex items-center justify-center p-4 text-xs text-neutral-400">
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Searching people...
+                  </div>
+                ) : matchingPeople.length > 0 ? (
+                  <div className="space-y-1">
+                    {matchingPeople.map((person) => (
+                      <div
+                        key={person.id}
+                        onMouseDown={() => navigate(`/profile/${person.username}`)}
+                        className="flex items-center justify-between gap-3 p-2 rounded-xl hover:bg-[#faf9f5] cursor-pointer transition"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <img
+                            src={person.avatar}
+                            alt={person.name}
+                            onError={(e) => {
+                              e.target.src = "/default-avatar.svg";
+                            }}
+                            className="h-8 w-8 rounded-full object-cover shrink-0 ring-1 ring-black/5"
+                          />
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-neutral-900 truncate">
+                              {person.name}
+                            </p>
+                            <p className="text-[11.5px] text-neutral-500 truncate">
+                              @{person.username}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onMouseDown={(e) => handleSendFriendRequest(person, e)}
+                          className={`rounded-full px-3 py-1 text-xs font-semibold shrink-0 transition active:scale-95 ${
+                            person.friendStatus === "friends"
+                              ? "bg-[#b8ede0] text-[#00201b]"
+                              : person.friendStatus === "added"
+                              ? "bg-[#b8ede0] text-[#00201b]"
+                              : "bg-[#f0eee9] text-[#1b1c19] hover:bg-black hover:text-white"
+                          }`}
+                        >
+                          {person.friendStatus === "friends"
+                            ? "Following"
+                            : person.friendStatus === "added"
+                            ? "Requested"
+                            : "Follow"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-3 text-center text-xs text-neutral-500">
+                    No people found matching "{searchQuery}"
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Search helper */}
             {isSearchFocused && !searchQuery && (
@@ -1748,13 +1868,7 @@ export default function HomePage() {
                           : "bg-[#1863dc] text-white hover:bg-blue-600"
                       }`}
                     >
-                      {person.isFollowing
-                        ? person.id === "karan"
-                          ? "Following"
-                          : "Added"
-                        : person.id === "karan"
-                        ? "Follow"
-                        : "Add Friend"}
+                      {person.isFollowing ? "Following" : "Follow"}
                     </button>
                     <button
                       type="button"

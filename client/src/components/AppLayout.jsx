@@ -15,11 +15,13 @@ import {
   LogOut,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useSocket } from "../context/SocketContext";
 import BrandMark from "./BrandMark";
 import GlobalPostModal from "./GlobalPostModal";
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
+  const { unreadCount } = useSocket();
   const location = useLocation();
   const navigate = useNavigate();
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -118,6 +120,11 @@ export default function AppLayout() {
             className="relative flex h-8 w-8 items-center justify-center rounded-full text-neutral-800 hover:bg-[#edeae3] transition"
           >
             <Bell className="h-5 w-5 stroke-[2]" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#da5c40] px-1 text-[10px] font-bold text-white shadow-xs">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
           </NavLink>
           <NavLink
             to={`/u/${userHandle}`}
@@ -185,7 +192,11 @@ export default function AppLayout() {
                       />
                       <span>{item.label}</span>
                     </div>
-
+                    {item.to === "/notifications" && unreadCount > 0 && (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#da5c40] px-1.5 text-[11px] font-bold text-white shadow-xs">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    )}
                   </NavLink>
                 );
               })}
@@ -339,7 +350,11 @@ export default function AppLayout() {
           }
         >
           <Bell className="h-6 w-6 stroke-[2]" />
-          <span className="absolute top-2 right-2 flex h-2 w-2 rounded-full bg-[#ffad9b]" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#da5c40] px-1 text-[10px] font-bold text-white">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          )}
         </NavLink>
 
         {/* Messages */}

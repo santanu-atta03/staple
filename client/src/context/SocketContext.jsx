@@ -18,13 +18,19 @@ export function SocketProvider({ children }) {
       return;
     }
 
-    // Fetch initial Redis unread notification count
-    api
-      .get("/notifications/unread-count")
-      .then(({ data }) => setUnreadCount(data.unreadCount || 0))
-      .catch(() => {});
+    const fetchUnread = () => {
+      api
+        .get("/notifications/unread-count")
+        .then(({ data }) => setUnreadCount(data.unreadCount || 0))
+        .catch(() => {});
+    };
 
-    const token = localStorage.getItem("accessToken");
+    // Fetch initial unread notification count + periodic fallback sync
+    fetchUnread();
+    const pollInterval = setInterval(fetchUnread, 10000);
+
+    const token =
+      localStorage.getItem("staple_access_token") || localStorage.getItem("accessToken");
     const socketInstance = io("/", {
       auth: { token: token || "guest" },
       transports: ["polling", "websocket"],
@@ -47,6 +53,7 @@ export function SocketProvider({ children }) {
     setSocket(socketInstance);
 
     return () => {
+      clearInterval(pollInterval);
       socketInstance.disconnect();
       setSocket(null);
     };

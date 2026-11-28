@@ -6,6 +6,7 @@ const authenticate = require("../../middleware/auth.middleware");
 router.use(authenticate.optionalAuthenticate);
 
 // Specific user sub-resources (before /:username parameter route)
+router.get("/search", userController.searchUsers);
 router.get("/profile/:username", userController.getProfile);
 router.get("/me", authenticate, (req, res) => {
   res.json({ success: true, user: req.user });

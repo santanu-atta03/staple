@@ -17,12 +17,24 @@ const getProfile = async (req, res, next) => {
       : mongoose.isValidObjectId(handle)
         ? { _id: handle }
         : { username: handle };
-    const user = await User.findOne({
-      ...identity,
-      isActive: true,
-      emailVerified: true,
-    }).select("_id username fullName avatar bio website location pronouns cover isPrivate followersCount followingCount emailVerified createdAt");
+    let user = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        user = await User.findOne({
+          ...identity,
+          isActive: true,
+          emailVerified: true,
+        }).select("_id username fullName avatar bio website location pronouns cover isPrivate followersCount followingCount emailVerified createdAt");
+      } catch (dbErr) {
+        user = null;
+      }
+    }
+
     if (!user) {
+      const storeProfile = store.getUserProfile(handle, viewerUserId);
+      if (storeProfile) {
+        return res.json({ success: true, user: storeProfile });
+      }
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
@@ -39,11 +51,15 @@ const getProfile = async (req, res, next) => {
     const postVisibility = isSelf || isFollowing
       ? ["public", "followers", "private"]
       : ["public"];
-    const postsCount = await Post.countDocuments({
-      authorId: user._id,
-      isDeleted: { $ne: true },
-      $or: [{ visibility: { $in: postVisibility } }, { visibility: { $exists: false } }],
-    });
+    const [postsCount, followersCount, followingCount] = await Promise.all([
+      Post.countDocuments({
+        authorId: user._id,
+        isDeleted: { $ne: true },
+        $or: [{ visibility: { $in: postVisibility } }, { visibility: { $exists: false } }],
+      }),
+      Follow.countDocuments({ followingId: user._id }),
+      Follow.countDocuments({ followerId: user._id }),
+    ]);
     return res.json({
       success: true,
       user: {
@@ -61,8 +77,8 @@ const getProfile = async (req, res, next) => {
         cover: user.cover || "",
         joined: user.createdAt ? `Joined ${new Date(user.createdAt).toLocaleDateString()}` : "",
         postsCount,
-        followersCount: user.followersCount || 0,
-        followingCount: user.followingCount || 0,
+        followersCount,
+        followingCount,
         isVerified: Boolean(user.emailVerified),
         isSelf,
         isFollowing,
@@ -93,7 +109,7 @@ const updateMe = async (req, res, next) => {
     for (const field of ["bio", "website", "location", "pronouns", "avatar", "cover"]) {
       if (body[field] !== undefined) updates[field] = String(body[field]).trim();
     }
-    const user = await User.findByIdAndUpdate(userId, { $set: updates }, { new: true, runValidators: true });
+    const user = await User.findByIdAndUpdate(userId, { $set: updates }, { returnDocument: "after", runValidators: true });
     if (!user) return res.status(404).json({ success: false, message: "Account not found" });
     store.initializeUser(user);
     const profileUpdates = {
@@ -213,30 +229,38 @@ const addHighlight = async (req, res, next) => {
 const getFollowers = async (req, res, next) => {
   try {
     const { username } = req.params;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+
     const target = await User.findOne({ username: String(username).toLowerCase(), isActive: true })
       .select("_id isPrivate")
       .lean();
-    if (!target) return res.json({ success: true, followers: [] });
+    if (!target) return res.json({ success: true, followers: [], hasMore: false });
     const viewerId = req.user?._id || req.user?.id;
     const canView = !target.isPrivate ||
       viewerId?.toString() === target._id.toString() ||
       (viewerId && await Follow.exists({ followerId: viewerId, followingId: target._id }));
     if (!canView) return res.status(404).json({ success: false, message: "User not found" });
-    const followers = await followService.getFollowersList(target._id, 1, 100);
-    const followedIds = viewerId && followers.length
+    const followers = await followService.getFollowersList(target._id, page, limit + 1);
+    const hasMore = followers.length > limit;
+    const sliced = hasMore ? followers.slice(0, limit) : followers;
+
+    const followedIds = viewerId && sliced.length
       ? await Follow.find({
           followerId: viewerId,
-          followingId: { $in: followers.map((person) => person._id) },
+          followingId: { $in: sliced.map((person) => person._id) },
         }).select("followingId").lean()
       : [];
     const followingSet = new Set(followedIds.map((item) => item.followingId.toString()));
     return res.json({
       success: true,
-      followers: followers.map((person) => ({
+      hasMore,
+      followers: sliced.map((person) => ({
         id: person._id.toString(),
         username: person.username,
         name: person.fullName || person.username,
         avatar: person.avatar || "/default-avatar.svg",
+        isSelf: Boolean(viewerId && person._id.toString() === viewerId.toString()),
         isFollowing: followingSet.has(person._id.toString()),
       })),
     });
@@ -248,23 +272,40 @@ const getFollowers = async (req, res, next) => {
 const getFollowing = async (req, res, next) => {
   try {
     const { username } = req.params;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+
     const target = await User.findOne({ username: String(username).toLowerCase(), isActive: true })
       .select("_id isPrivate")
       .lean();
-    if (!target) return res.json({ success: true, following: [] });
+    if (!target) return res.json({ success: true, following: [], hasMore: false });
     const viewerId = req.user?._id || req.user?.id;
     const canView = !target.isPrivate ||
       viewerId?.toString() === target._id.toString() ||
       (viewerId && await Follow.exists({ followerId: viewerId, followingId: target._id }));
     if (!canView) return res.status(404).json({ success: false, message: "User not found" });
-    const following = await followService.getFollowingList(target._id, 1, 100);
+    const following = await followService.getFollowingList(target._id, page, limit + 1);
+    const hasMore = following.length > limit;
+    const sliced = hasMore ? following.slice(0, limit) : following;
+
+    const followedIds = viewerId && sliced.length
+      ? await Follow.find({
+          followerId: viewerId,
+          followingId: { $in: sliced.map((person) => person._id) },
+        }).select("followingId").lean()
+      : [];
+    const followingSet = new Set(followedIds.map((item) => item.followingId.toString()));
+
     return res.json({
       success: true,
-      following: following.map((person) => ({
+      hasMore,
+      following: sliced.map((person) => ({
         id: person._id.toString(),
         username: person.username,
         name: person.fullName || person.username,
         avatar: person.avatar || "/default-avatar.svg",
+        isSelf: Boolean(viewerId && person._id.toString() === viewerId.toString()),
+        isFollowing: followingSet.has(person._id.toString()),
       })),
     });
   } catch (err) {
@@ -275,29 +316,115 @@ const getFollowing = async (req, res, next) => {
 const toggleFollow = async (req, res, next) => {
   try {
     const { username } = req.params;
+    const viewerId = (req.user._id || req.user.id).toString();
     const target = await User.findOne({
       username: String(username).toLowerCase(),
       isActive: true,
       emailVerified: true,
       isPrivate: false,
-    }).select("_id");
+    }).select("_id username fullName avatar");
     if (!target) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
-    const result = await followService.toggleFollowUser(req.user._id || req.user.id, target._id);
+    const targetId = target._id.toString();
+    if (viewerId === targetId) {
+      return res.status(400).json({ success: false, message: "You cannot follow yourself" });
+    }
+
+    const existingFollow = await Follow.findOne({ followerId: viewerId, followingId: targetId });
+    let isFollowing = false;
+
+    if (existingFollow) {
+      await Follow.deleteOne({ _id: existingFollow._id });
+      isFollowing = false;
+    } else {
+      await Follow.create({ followerId: viewerId, followingId: targetId });
+      isFollowing = true;
+    }
+
+    const [targetFollowersCount, viewerFollowingCount] = await Promise.all([
+      Follow.countDocuments({ followingId: targetId }),
+      Follow.countDocuments({ followerId: viewerId }),
+    ]);
+
+    await Promise.all([
+      User.findByIdAndUpdate(targetId, { $set: { followersCount: targetFollowersCount } }),
+      User.findByIdAndUpdate(viewerId, { $set: { followingCount: viewerFollowingCount } }),
+    ]);
+
+    // Keep store.js in sync
+    store.toggleFollow(target.username, viewerId);
+
+    // Send follow notification when newly following (avoid duplicates)
+    if (isFollowing) {
+      const actor = await User.findById(viewerId).select("username fullName avatar").lean();
+      if (!Array.isArray(store.data.notifications)) store.data.notifications = [];
+      const alreadyNotified = store.data.notifications.some(
+        (n) =>
+          n.recipientId === targetId &&
+          n.senderId === viewerId &&
+          n.type === "follow" &&
+          !n.isRead
+      );
+      if (!alreadyNotified) {
+        store.data.notifications.unshift({
+          id: `notif_follow_${viewerId}_${Date.now()}`,
+          recipientId: targetId,
+          senderId: viewerId,
+          section: "today",
+          type: "follow",
+          unread: true,
+          isRead: false,
+          user: actor?.username || "user",
+          avatar: actor?.avatar || "/default-avatar.svg",
+          badgeType: "friend",
+          titlePrefix: actor?.username || "user",
+          titleSuffix: " started following you.",
+          subtext: "Just now",
+          time: "Just now",
+          isFriendRequest: false,
+          createdAt: new Date().toISOString(),
+        });
+        store.saveData();
+      }
+    }
+
     const io = getIO();
     if (io) {
-      io.to(`user:${req.user.id}`).emit("follow:updated", {
-        username,
-        isFollowing: result.following,
-        followersCount: result.followerCount,
+      io.to(`user:${viewerId}`).emit("follow:updated", {
+        targetUsername: target.username,
+        isFollowing,
+        followersCount: targetFollowersCount,
+        followingCount: viewerFollowingCount,
       });
+      io.to(`user:${targetId}`).emit("follow:updated", {
+        targetUsername: target.username,
+        isFollowing,
+        followersCount: targetFollowersCount,
+      });
+      if (isFollowing) {
+        const unreadCount = store.getNotificationUnreadCount(targetId);
+        io.to(`user:${targetId}`).emit("notification:new", { unreadCount });
+      }
     }
+
     return res.json({
       success: true,
-      isFollowing: result.following,
-      followersCount: result.followerCount,
+      isFollowing,
+      followersCount: targetFollowersCount,
+      followingCount: viewerFollowingCount,
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const searchUsers = async (req, res, next) => {
+  try {
+    const q = req.query.q || "";
+    const viewerUserId = req.user?._id || req.user?.id;
+    const people = store.searchUsers(q, viewerUserId);
+    res.json({ success: true, count: people.length, people });
   } catch (err) {
     next(err);
   }
@@ -312,4 +439,5 @@ module.exports = {
   getFollowers,
   getFollowing,
   toggleFollow,
+  searchUsers,
 };

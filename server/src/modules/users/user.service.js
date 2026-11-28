@@ -36,7 +36,7 @@ const updateUserProfile = async (userId, updates) => {
   const user = await User.findByIdAndUpdate(
     userId,
     { $set: filteredUpdates },
-    { new: true, runValidators: true }
+    { returnDocument: "after", runValidators: true }
   )
     .select("-password -passwordHash")
     .lean();

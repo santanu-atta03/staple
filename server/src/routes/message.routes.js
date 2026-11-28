@@ -27,7 +27,10 @@ router.post("/notes", (req, res) => {
   const notes = store.updateUserNote(userId, note);
   try {
     const io = getIO();
-    if (io) io.to(`user:${userId}`).emit("notes:updated", { notes });
+    if (io) {
+      io.to(`user:${userId}`).emit("notes:updated", { userId, notes });
+      io.emit("notes:updated", { userId });
+    }
   } catch (e) {}
   res.json({ success: true, notes });
 });
@@ -38,13 +41,16 @@ router.delete("/notes", (req, res) => {
   const notes = store.deleteUserNote(userId);
   try {
     const io = getIO();
-    if (io) io.to(`user:${userId}`).emit("notes:updated", { notes });
+    if (io) {
+      io.to(`user:${userId}`).emit("notes:updated", { userId, notes });
+      io.emit("notes:updated", { userId });
+    }
   } catch (e) {}
   res.json({ success: true, notes });
 });
 
 // POST Reply to Note
-router.post("/notes/:id/reply", (req, res) => {
+router.post("/notes/:id/reply", async (req, res) => {
   const { id } = req.params;
   const { text } = req.body;
   const userId = req.user.id;
@@ -52,20 +58,38 @@ router.post("/notes/:id/reply", (req, res) => {
     return res.status(400).json({ success: false, message: "Reply text is required" });
   }
 
-  // Send message to this user's conversation
-  const result = store.sendMessage(id, { text: `Replying to note: "${text.trim()}"`, senderId: userId });
+  let targetConvId = id;
+  let result = store.sendMessage(targetConvId, { text: `Replying to note: "${text.trim()}"`, senderId: userId });
+  if (!result) {
+    // id may be the note author's userId — find or create direct conversation
+    const targetUser = store.findUser(id) || (await User.findById(id).select("_id username fullName avatar").catch(() => null));
+    if (targetUser) {
+      store.initializeUser(targetUser);
+      const conv = store.createConversation({
+        userId: (targetUser._id || targetUser.id).toString(),
+        name: targetUser.fullName || targetUser.name || targetUser.username,
+        username: targetUser.username,
+        avatar: targetUser.avatar || "/default-avatar.svg",
+        currentUserId: userId,
+      });
+      if (conv) {
+        targetConvId = conv.id;
+        result = store.sendMessage(targetConvId, { text: `Replying to note: "${text.trim()}"`, senderId: userId });
+      }
+    }
+  }
   if (!result) {
     return res.status(404).json({ success: false, message: "Conversation not found" });
   }
   try {
     const io = getIO();
     if (io) {
-      io.to(`chat:${id}`).emit("message:received", { chatId: id, message: result.message });
-      emitConversationUpdate(io, result.conversation, { conversationId: id });
+      io.to(`chat:${targetConvId}`).emit("message:received", { chatId: targetConvId, message: result.message });
+      emitConversationUpdate(io, result.conversation, { conversationId: targetConvId });
     }
   } catch (e) {}
 
-  res.json({ success: true, message: result.message, conversationId: id });
+  res.json({ success: true, message: result.message, conversationId: targetConvId });
 });
 
 // GET Conversations List
@@ -120,16 +144,23 @@ router.get("/people", async (req, res, next) => {
 router.post("/conversations", async (req, res, next) => {
   const currentUserId = req.user.id;
   try {
-    const target = await User.findById(req.body?.userId).select(
-      "_id username email fullName avatar bio website location pronouns cover isPrivate"
-    );
+    const targetUserId = req.body?.userId || req.body?.recipientId;
+    let target = null;
+    if (targetUserId) {
+      target = await User.findById(targetUserId).select(
+        "_id username email fullName avatar bio website location pronouns cover isPrivate"
+      );
+    }
+    if (!target && targetUserId) {
+      target = store.findUser(targetUserId);
+    }
     if (!target) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
     store.initializeUser(target);
     const conv = store.createConversation({
-      userId: target._id.toString(),
-      name: target.fullName || target.username,
+      userId: (target._id || target.id).toString(),
+      name: target.fullName || target.name || target.username,
       username: target.username,
       avatar: target.avatar || "/default-avatar.svg",
       currentUserId,

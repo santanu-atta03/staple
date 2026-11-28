@@ -51,13 +51,6 @@ class PersistentStore {
         const userHighlights = parsed.userHighlights || {};
         const userNotes = parsed.userNotes || {};
 
-        const recordsWithoutDemoFixtures = (key) =>
-          (Array.isArray(parsed[key]) ? parsed[key] : []).filter(
-            (record) => !DEMO_RECORD_IDS[key]?.has(String(record.id || record._id))
-          );
-        const notifications = recordsWithoutDemoFixtures("notifications");
-        const conversations = recordsWithoutDemoFixtures("conversations");
-
         return {
           ...defaultInitialState,
           ...parsed,
@@ -67,33 +60,25 @@ class PersistentStore {
           userFollowing,
           userHighlights,
           userNotes,
-          stories: recordsWithoutDemoFixtures("stories"),
-          notifications,
-          conversations,
-          notes: recordsWithoutDemoFixtures("notes"),
-          highlights: recordsWithoutDemoFixtures("highlights"),
-          profilePosts: recordsWithoutDemoFixtures("profilePosts"),
+          userNotificationSidebars: parsed.userNotificationSidebars || {},
+          stories: Array.isArray(parsed.stories) ? parsed.stories : [],
+          notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
+          conversations: Array.isArray(parsed.conversations) ? parsed.conversations : [],
+          notes: Array.isArray(parsed.notes) ? parsed.notes : [],
+          highlights: Array.isArray(parsed.highlights) ? parsed.highlights : [],
+          profilePosts: Array.isArray(parsed.profilePosts) ? parsed.profilePosts : [],
           legacyCurrentUser: parsed.legacyCurrentUser || parsed.currentUser || null,
-          explorePosts: [],
-          audioTrends: [],
-          creators: [],
-          communities: [],
-          people: [],
-          groups: Array.isArray(parsed.groups)
-            ? parsed.groups.filter((group) => group?.ownerId)
-            : [],
-          following: [],
-          bookmarks: [],
-          notes: [],
-          notificationSidebar: {
-            friendRequests: [],
-            birthdays: [],
-            suggestedFriends: [],
-          },
-          settings: {},
+          explorePosts: Array.isArray(parsed.explorePosts) ? parsed.explorePosts : [],
+          audioTrends: Array.isArray(parsed.audioTrends) ? parsed.audioTrends : [],
+          creators: Array.isArray(parsed.creators) ? parsed.creators : [],
+          communities: Array.isArray(parsed.communities) ? parsed.communities : [],
+          people: Array.isArray(parsed.people) ? parsed.people : [],
+          groups: Array.isArray(parsed.groups) ? parsed.groups : [],
+          following: Array.isArray(parsed.following) ? parsed.following : [],
+          bookmarks: Array.isArray(parsed.bookmarks) ? parsed.bookmarks : [],
+          settings: parsed.settings || {},
           users: Array.isArray(parsed.users) ? parsed.users : [],
-          currentUser: null,
-          legacyCurrentUser: null,
+          currentUser: parsed.currentUser || null,
         };
       }
     } catch (err) {
@@ -626,26 +611,53 @@ class PersistentStore {
       }
     }
 
-    const handle = person.username || person.id;
+    const targetId = (person.id || person._id || person.username || "").toString();
+    const handle = (person.username || targetId).toString();
+
     if (!this.data.userFollowing) this.data.userFollowing = {};
     if (!Array.isArray(this.data.userFollowing[uid])) this.data.userFollowing[uid] = [];
     const isFollowing =
       this.data.userFollowing[uid].includes(handle) ||
-      this.data.userFollowing[uid].includes(person.id);
+      this.data.userFollowing[uid].includes(targetId);
+
     if (!isFollowing) {
-      this.data.userFollowing[uid].push(handle);
-      if (person.id && person.id !== handle) {
-        this.data.userFollowing[uid].push(person.id);
+      if (!this.data.userFollowing[uid].includes(handle)) {
+        this.data.userFollowing[uid].push(handle);
+      }
+      if (targetId && targetId !== handle && !this.data.userFollowing[uid].includes(targetId)) {
+        this.data.userFollowing[uid].push(targetId);
       }
     } else {
       this.data.userFollowing[uid] = this.data.userFollowing[uid].filter(
-        (id) => id !== handle && id !== person.id
+        (id) => id !== handle && id !== targetId
       );
     }
+
     const user = this.findUser(uid);
-    if (user) user.followingCount = this.data.userFollowing[uid].length;
+    if (user) {
+      // Calculate distinct following count
+      user.followingCount = new Set(this.data.userFollowing[uid]).size;
+    }
+
+    // Calculate actual followers count for target
+    let targetFollowersCount = 0;
+    Object.keys(this.data.userFollowing).forEach((followerUid) => {
+      const list = this.data.userFollowing[followerUid] || [];
+      if (list.includes(handle) || list.includes(targetId)) {
+        targetFollowersCount += 1;
+      }
+    });
+
+    const targetUserObj = this.findUser(targetId) || this.findUser(handle);
+    if (targetUserObj) {
+      targetUserObj.followersCount = targetFollowersCount;
+    }
+    if (person && typeof person === "object") {
+      person.followersCount = targetFollowersCount;
+    }
+
     this.saveData();
-    return { ...person, isFollowing: !isFollowing };
+    return { ...person, isFollowing: !isFollowing, followersCount: targetFollowersCount };
   }
 
   // Update Profile
@@ -688,8 +700,22 @@ class PersistentStore {
       const posts = this.getUserPosts(targetUser.username, "posts", viewerUserId);
       const followingList = this.data.userFollowing?.[targetUser._id || targetUser.id] || [];
       const isFollowing = viewerUserId
-        ? (this.data.userFollowing?.[viewerUserId] || []).includes(targetUser.username || targetUser._id)
+        ? (this.data.userFollowing?.[viewerUserId] || []).includes(targetUser.username) || (this.data.userFollowing?.[viewerUserId] || []).includes(targetUser._id || targetUser.id)
         : false;
+
+      const targetIdStr = (targetUser._id || targetUser.id || "").toString();
+      const targetHandle = (targetUser.username || "").toLowerCase();
+      let calculatedFollowers = 0;
+      Object.keys(this.data.userFollowing || {}).forEach((fUid) => {
+        const list = this.data.userFollowing[fUid] || [];
+        if (
+          list.some(
+            (val) => val === targetIdStr || (typeof val === "string" && val.toLowerCase() === targetHandle)
+          )
+        ) {
+          calculatedFollowers += 1;
+        }
+      });
 
       return {
         _id: targetUser._id || targetUser.id,
@@ -707,8 +733,8 @@ class PersistentStore {
         joined: targetUser.joined || "Joined Staple",
         cover: targetUser.cover || "",
         postsCount: posts.length,
-        followersCount: targetUser.followersCount || 0,
-        followingCount: followingList.length,
+        followersCount: calculatedFollowers,
+        followingCount: new Set(followingList).size,
         isSelf: isSelf || (viewerUserId && (viewerUserId === targetUser._id || viewerUserId === targetUser.id)),
         isFollowing,
       };
@@ -1195,10 +1221,26 @@ class PersistentStore {
     let list = this.data.notifications.filter((n) => n.recipientId === uid);
 
     if (tab && tab !== "all") {
-      list = list.filter((n) => n.type === tab);
+      if (tab === "friends" || tab === "followers") {
+        list = list.filter((n) => n.type === "follow" || n.type === "friends");
+      } else {
+        list = list.filter((n) => n.type === tab);
+      }
     }
 
-    const unreadCount = list.filter((n) => !n.isRead).length;
+    const followingSet = new Set(this.data.userFollowing?.[uid] || []);
+    list = list.map((n) =>
+      n.type === "follow"
+        ? {
+            ...n,
+            isFollowingBack: Boolean(
+              followingSet.has(n.user) || (n.senderId && followingSet.has(n.senderId))
+            ),
+          }
+        : n
+    );
+
+    const unreadCount = this.data.notifications.filter((n) => n.recipientId === uid && !n.isRead).length;
 
     return {
       notifications: list,
@@ -1300,10 +1342,42 @@ class PersistentStore {
     if (!Array.isArray(this.data.notifications)) {
       this.data.notifications = [];
     }
-    const item = this.data.notifications.find((n) => n.id === id && n.recipientId === userId.toString());
+    const item = this.data.notifications.find(
+      (n) => n.id === id && n.recipientId === userId.toString()
+    );
     if (!item) return null;
 
-    item.friendStatus = action === "accept" || action === "confirmed" ? "confirmed" : "deleted";
+    const isConfirmed =
+      action === "accept" || action === "confirm" || action === "confirmed";
+    item.friendStatus = isConfirmed ? "confirmed" : "deleted";
+    item.isRead = true;
+
+    // Also sync sidebar
+    const senderId = item.senderId;
+    const uid = userId.toString();
+    const sidebar = this.getNotificationSidebar(uid);
+    let req = (sidebar.friendRequests || []).find(
+      (r) => r.id === `req_${senderId}` || r.fromUserId === senderId
+    );
+    if (req) {
+      req.status = item.friendStatus;
+    }
+
+    if (senderId) {
+      const senderSidebar = this.getNotificationSidebar(senderId);
+      const senderSuggested = (senderSidebar.suggestedFriends || []).find(
+        (s) => s.id === uid
+      );
+      if (senderSuggested) {
+        senderSuggested.status = isConfirmed ? "friends" : "idle";
+      }
+
+      if (isConfirmed) {
+        this.toggleFollow(senderId, uid);
+        this.toggleFollow(uid, senderId);
+      }
+    }
+
     this.saveData();
     return { friendStatus: item.friendStatus };
   }
@@ -1314,7 +1388,7 @@ class PersistentStore {
     if (!this.data.userNotificationSidebars[uid] || !this.data.userNotificationSidebars[uid].suggestedFriends?.length) {
       const otherUsers = (this.data.users || [])
         .filter((u) => (u._id || u.id)?.toString() !== uid)
-        .slice(0, 5)
+        .slice(0, 10)
         .map((u) => ({
           id: (u._id || u.id).toString(),
           name: u.fullName || u.name || u.username,
@@ -1324,20 +1398,7 @@ class PersistentStore {
         }));
 
       const defaultCuratedSuggestions = [
-        {
-          id: "sug_liam",
-          name: "Liam Sterling",
-          subtitle: "Followed by sarah_lin",
-          avatar: "/notifications/liam.png",
-          status: "idle",
-        },
-        {
-          id: "sug_helene",
-          name: "Hélène Moreau",
-          subtitle: "8 mutual friends",
-          avatar: "/notifications/helene.png",
-          status: "idle",
-        },
+
       ];
 
       const merged = [
@@ -1349,24 +1410,11 @@ class PersistentStore {
         friendRequests: this.data.userNotificationSidebars[uid]?.friendRequests?.length
           ? this.data.userNotificationSidebars[uid].friendRequests
           : [
-              {
-                id: "req_maya",
-                name: "Maya Davis",
-                subtitle: "12 mutual friends",
-                avatar: "/notifications/maya.png",
-                status: "pending",
-              },
             ],
         birthdays: this.data.userNotificationSidebars[uid]?.birthdays?.length
           ? this.data.userNotificationSidebars[uid].birthdays
           : [
-              {
-                id: "bday_lucas",
-                name: "Lucas Vance",
-                subtext: "Leave a message on his timeline",
-                avatar: "/notifications/lucas.png",
-                isWished: false,
-              },
+
             ],
         suggestedFriends: merged,
       };
@@ -1375,18 +1423,176 @@ class PersistentStore {
     return this.data.userNotificationSidebars[uid];
   }
 
+  // Cross-Account Friend Request Delivery
+  sendFriendRequest(fromUserId, toUserId) {
+    if (!fromUserId || !toUserId || fromUserId.toString() === toUserId.toString()) {
+      return null;
+    }
+    const fromId = fromUserId.toString();
+    const toId = toUserId.toString();
+
+    const sender = this.findUser(fromId) || {
+      id: fromId,
+      _id: fromId,
+      name: fromId,
+      username: fromId,
+      avatar: "/default-avatar.svg",
+    };
+    const recipient = this.findUser(toId) || {
+      id: toId,
+      _id: toId,
+      name: toId,
+      username: toId,
+      avatar: "/default-avatar.svg",
+    };
+
+    const senderSidebar = this.getNotificationSidebar(fromId);
+    const recipientSidebar = this.getNotificationSidebar(toId);
+
+    let senderSuggested = (senderSidebar.suggestedFriends || []).find((s) => s.id === toId);
+    if (!senderSuggested) {
+      senderSuggested = {
+        id: toId,
+        name: recipient.name || recipient.fullName || recipient.username,
+        subtitle: `@${recipient.username}`,
+        avatar: recipient.avatar || "/default-avatar.svg",
+        status: "idle",
+      };
+      senderSidebar.suggestedFriends.push(senderSuggested);
+    }
+
+    const isCurrentlyAdded = senderSuggested.status === "added";
+
+    if (!Array.isArray(recipientSidebar.friendRequests)) {
+      recipientSidebar.friendRequests = [];
+    }
+    if (!Array.isArray(this.data.notifications)) {
+      this.data.notifications = [];
+    }
+
+    if (!isCurrentlyAdded) {
+      senderSuggested.status = "added";
+
+      // 1. Deliver to recipient's Friend Requests widget
+      const reqId = `req_${fromId}`;
+      const existingReqIndex = recipientSidebar.friendRequests.findIndex(
+        (r) => r.id === reqId || r.fromUserId === fromId
+      );
+      const newReq = {
+        id: reqId,
+        fromUserId: fromId,
+        name: sender.name || sender.fullName || sender.username,
+        username: sender.username,
+        subtitle: `@${sender.username}`,
+        mutualFriends: "1 mutual connection",
+        avatar: sender.avatar || "/default-avatar.svg",
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      };
+
+      if (existingReqIndex >= 0) {
+        recipientSidebar.friendRequests[existingReqIndex] = newReq;
+      } else {
+        recipientSidebar.friendRequests.unshift(newReq);
+      }
+
+      // 2. Deliver real notification to recipient's notification feed
+      this.data.notifications.unshift({
+        id: `notif_friend_${fromId}_${Date.now()}`,
+        recipientId: toId,
+        senderId: fromId,
+        section: "today",
+        type: "friends",
+        unread: true,
+        isRead: false,
+        user: sender.username,
+        avatar: sender.avatar || "/default-avatar.svg",
+        badgeType: "friend",
+        titlePrefix: sender.username,
+        titleSuffix: " sent you a friend request.",
+        subtext: "Just now",
+        time: "Just now",
+        isFriendRequest: true,
+        friendStatus: "pending",
+        createdAt: new Date().toISOString(),
+      });
+    } else {
+      // Cancel request
+      senderSuggested.status = "idle";
+      recipientSidebar.friendRequests = recipientSidebar.friendRequests.filter(
+        (r) => r.id !== `req_${fromId}` && r.fromUserId !== fromId
+      );
+      this.data.notifications = this.data.notifications.filter(
+        (n) => !(n.recipientId === toId && n.senderId === fromId && n.type === "friends")
+      );
+    }
+
+    this.saveData();
+    return { id: toId, status: senderSuggested.status };
+  }
+
   respondSidebarFriendRequest(id, action, userId) {
-    const sidebar = this.getNotificationSidebar(userId);
-    let req = (sidebar.friendRequests || []).find((r) => r.id === id);
+    const uid = (userId || "").toString();
+    const sidebar = this.getNotificationSidebar(uid);
+    let req = (sidebar.friendRequests || []).find((r) => r.id === id || r.fromUserId === id);
     if (!req) {
       req = { id, status: "pending" };
       sidebar.friendRequests.push(req);
     }
 
-    req.status =
-      action === "accept" || action === "confirm" || action === "confirmed"
-        ? "confirmed"
-        : "deleted";
+    const isConfirmed =
+      action === "accept" || action === "confirm" || action === "confirmed";
+    req.status = isConfirmed ? "confirmed" : "deleted";
+
+    // Sync notification item
+    if (Array.isArray(this.data.notifications)) {
+      this.data.notifications.forEach((n) => {
+        if (
+          n.recipientId === uid &&
+          (n.senderId === req.fromUserId || n.id === id || n.user === req.username)
+        ) {
+          n.friendStatus = req.status;
+          n.isRead = true;
+        }
+      });
+    }
+
+    const senderId = req.fromUserId;
+    if (senderId) {
+      const senderSidebar = this.getNotificationSidebar(senderId);
+      const senderSuggested = (senderSidebar.suggestedFriends || []).find((s) => s.id === uid);
+      if (senderSuggested) {
+        senderSuggested.status = isConfirmed ? "friends" : "idle";
+      }
+
+      if (isConfirmed) {
+        // Mutual follow & friendship
+        this.toggleFollow(senderId, uid);
+        this.toggleFollow(uid, senderId);
+
+        const accepter = this.findUser(uid);
+        this.data.notifications.unshift({
+          id: `notif_accept_${uid}_${Date.now()}`,
+          recipientId: senderId,
+          senderId: uid,
+          section: "today",
+          type: "friends",
+          unread: true,
+          isRead: false,
+          user: accepter?.username || "user",
+          avatar: accepter?.avatar || "/default-avatar.svg",
+          badgeType: "friend",
+          titlePrefix: accepter?.username || "user",
+          titleSuffix: " accepted your friend request.",
+          subtext: "Just now",
+          time: "Just now",
+          isFriendRequest: false,
+          friendStatus: "confirmed",
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+
     this.saveData();
     return { id, status: req.status };
   }
@@ -1405,23 +1611,84 @@ class PersistentStore {
   }
 
   toggleSuggestedFriend(id, userId) {
-    const sidebar = this.getNotificationSidebar(userId);
-    let friend = (sidebar.suggestedFriends || []).find((f) => f.id === id);
-    if (!friend) {
-      const user = this.findUser(id);
-      friend = {
-        id,
-        name: user?.name || user?.username || id,
-        subtitle: user ? `@${user.username}` : "",
-        avatar: user?.avatar || "/default-avatar.svg",
-        status: "idle",
-      };
-      sidebar.suggestedFriends.push(friend);
-    }
+    return this.sendFriendRequest(userId, id);
+  }
 
-    friend.status = friend.status === "added" ? "idle" : "added";
-    this.saveData();
-    return { id, status: friend.status };
+  // SEARCH USERS & PEOPLE ACROSS THE PLATFORM
+  searchUsers(query = "", viewerUserId = null) {
+    const q = (query || "").trim().toLowerCase();
+    if (!q) return [];
+
+    const viewerIdStr = viewerUserId ? viewerUserId.toString() : null;
+    const followingSet = new Set(this.data.userFollowing?.[viewerIdStr] || []);
+    const viewerSidebar = viewerUserId ? this.getNotificationSidebar(viewerUserId) : null;
+
+    const allPeople = [];
+    const seen = new Set();
+
+    // 1. Search this.data.users (Real registered accounts)
+    (this.data.users || []).forEach((u) => {
+      const uid = (u._id || u.id || "").toString();
+      if (viewerIdStr && uid === viewerIdStr) return;
+      if (seen.has(uid)) return;
+
+      const name = (u.name || u.fullName || "").toLowerCase();
+      const username = (u.username || "").toLowerCase();
+      const email = (u.email || "").toLowerCase();
+      const bio = (u.bio || "").toLowerCase();
+
+      if (
+        username.includes(q) ||
+        name.includes(q) ||
+        email.includes(q) ||
+        bio.includes(q)
+      ) {
+        seen.add(uid);
+        const suggestedItem = (viewerSidebar?.suggestedFriends || []).find((s) => s.id === uid);
+        let friendStatus = suggestedItem?.status || "idle";
+        if (followingSet.has(u.username) || followingSet.has(uid)) {
+          friendStatus = "friends";
+        }
+
+        allPeople.push({
+          id: uid,
+          _id: uid,
+          name: u.fullName || u.name || u.username,
+          username: u.username,
+          avatar: u.avatar || "/default-avatar.svg",
+          bio: u.bio || "",
+          subtitle: `@${u.username}`,
+          isFollowing: followingSet.has(u.username) || followingSet.has(uid),
+          friendStatus,
+        });
+      }
+    });
+
+    // 2. Also search this.data.people
+    (this.data.people || []).forEach((p) => {
+      const pid = (p.id || p._id || p.username || "").toString();
+      if (seen.has(pid)) return;
+
+      const name = (p.name || "").toLowerCase();
+      const username = (p.username || "").toLowerCase();
+      if (name.includes(q) || username.includes(q)) {
+        seen.add(pid);
+        const suggestedItem = (viewerSidebar?.suggestedFriends || []).find((s) => s.id === pid);
+        allPeople.push({
+          id: pid,
+          _id: pid,
+          name: p.name,
+          username: p.username,
+          avatar: p.avatar || "/default-avatar.svg",
+          bio: p.bio || p.subtitle || "",
+          subtitle: `@${p.username}`,
+          isFollowing: followingSet.has(p.username) || followingSet.has(pid),
+          friendStatus: suggestedItem?.status || "idle",
+        });
+      }
+    });
+
+    return allPeople;
   }
 
   // --- MESSAGES & CONVERSATIONS METHODS (User-isolated) ---
@@ -1431,17 +1698,72 @@ class PersistentStore {
     const user = this.findUser(uid);
     const userAvatar = user?.avatar || "/default-avatar.svg";
 
+    const NOTE_TTL_MS = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const isFresh = (noteObj) =>
+      noteObj &&
+      noteObj.note &&
+      noteObj.note.trim().length > 0 &&
+      (!noteObj.updatedAt || now - new Date(noteObj.updatedAt).getTime() < NOTE_TTL_MS);
+
     const myNoteData = this.data.userNotes?.[uid];
     const myNote = {
-      id: "me",
+      id: uid,
+      userId: uid,
       name: "Your note",
+      username: user?.username || "",
       avatar: userAvatar,
-      note: myNoteData?.note || "",
+      note: isFresh(myNoteData) ? myNoteData.note : "",
       isSelf: true,
-      updatedAt: myNoteData?.updatedAt,
+      updatedAt: myNoteData?.updatedAt || null,
     };
 
-    return [myNote];
+    // Collect IDs of users the current user follows, followers, or conversation partners
+    const visibleUserIds = new Set();
+    const followingList = this.data.userFollowing?.[uid] || [];
+    followingList.forEach((entry) => {
+      const u = this.findUser(entry);
+      if (u) visibleUserIds.add((u._id || u.id).toString());
+    });
+    Object.keys(this.data.userFollowing || {}).forEach((otherUid) => {
+      const list = this.data.userFollowing[otherUid] || [];
+      if (
+        list.includes(uid) ||
+        (user?.username && list.includes(user.username))
+      ) {
+        visibleUserIds.add(otherUid);
+      }
+    });
+    (this.data.conversations || []).forEach((conv) => {
+      if (this.ownsConversation(conv, uid)) {
+        (conv.participants || []).forEach((p) => {
+          if (p !== uid) visibleUserIds.add(p.toString());
+        });
+      }
+    });
+
+    const otherNotes = [];
+    Object.entries(this.data.userNotes || {}).forEach(([authorId, noteData]) => {
+      if (authorId === uid) return;
+      if (!visibleUserIds.has(authorId)) return;
+      if (!isFresh(noteData)) return;
+      const author = this.findUser(authorId);
+      if (!author) return;
+      otherNotes.push({
+        id: authorId,
+        userId: authorId,
+        name: author.fullName || author.name || author.username,
+        username: author.username,
+        avatar: author.avatar || "/default-avatar.svg",
+        note: noteData.note,
+        isSelf: false,
+        active: true,
+        updatedAt: noteData.updatedAt,
+      });
+    });
+
+    otherNotes.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+    return [myNote, ...otherNotes];
   }
 
   updateUserNote(userIdOrText, noteText = null) {
@@ -1467,6 +1789,34 @@ class PersistentStore {
     return this.getNotes(uid);
   }
 
+  resolveConversationForUser(conversation, uid) {
+    let name = conversation.name;
+    let username = conversation.username;
+    let avatar = conversation.avatar;
+
+    if (!conversation.isGroup && Array.isArray(conversation.participants)) {
+      const otherId = conversation.participants.find((p) => p.toString() !== uid);
+      if (otherId) {
+        const otherUser = this.findUser(otherId);
+        if (otherUser) {
+          name = otherUser.fullName || otherUser.name || otherUser.username;
+          username = otherUser.username;
+          avatar = otherUser.avatar || "/default-avatar.svg";
+        }
+      }
+    }
+
+    return {
+      ...conversation,
+      name,
+      username,
+      avatar,
+      unread: conversation.unreadByUser?.[uid] ?? conversation.unread ?? 0,
+      isMuted: conversation.mutedFor?.includes(uid) || false,
+      isBlocked: conversation.blockedFor?.includes(uid) || false,
+    };
+  }
+
   getConversations(userId, searchQuery = "", tab = "all") {
     if (!userId) return [];
     const uid = userId.toString();
@@ -1474,12 +1824,7 @@ class PersistentStore {
     const selectedTab = tab;
     let list = (this.data.conversations || [])
       .filter((conversation) => this.ownsConversation(conversation, uid))
-      .map((conversation) => ({
-        ...conversation,
-        unread: conversation.unreadByUser?.[uid] ?? conversation.unread ?? 0,
-        isMuted: conversation.mutedFor?.includes(uid) || false,
-        isBlocked: conversation.blockedFor?.includes(uid) || false,
-      }));
+      .map((conversation) => this.resolveConversationForUser(conversation, uid));
 
     if (query && query.trim()) {
       const q = query.toLowerCase().trim();
@@ -1514,12 +1859,7 @@ class PersistentStore {
       (item) => item.id === id && this.ownsConversation(item, uid)
     );
     if (!conversation) return null;
-    return {
-      ...conversation,
-      unread: conversation.unreadByUser?.[uid] ?? conversation.unread ?? 0,
-      isMuted: conversation.mutedFor?.includes(uid) || false,
-      isBlocked: conversation.blockedFor?.includes(uid) || false,
-    };
+    return this.resolveConversationForUser(conversation, uid);
   }
 
   sendMessage(chatId, { text, type = "text", mediaUrl = null, replyTo = null, forwarded = false, senderId = null }) {
@@ -2068,37 +2408,49 @@ class PersistentStore {
     }
 
     if (!Array.isArray(this.data.users)) this.data.users = [];
-    let profile = this.data.users.find((item) => item._id?.toString() === userId);
+    let profile = this.data.users.find(
+      (item) => (item._id || item.id)?.toString() === userId
+    );
+    let changed = false;
     if (!profile) {
       profile = { _id: userId, id: userId };
       this.data.users.push(profile);
+      changed = true;
     }
 
-    Object.assign(profile, {
-      _id: userId,
-      id: userId,
-      username: user.username,
-      email: user.email,
-      name: user.fullName || user.name || user.username,
-      fullName: user.fullName || user.name || "",
-      avatar: user.avatar || "/default-avatar.svg",
-      fallbackAvatar: user.avatar || "/default-avatar.svg",
-      emailVerified: user.emailVerified === true,
-      isPrivate: user.isPrivate === true,
-      bio: user.bio || "",
-      website: user.website || "",
-      location: user.location || "",
-      pronouns: user.pronouns || "",
-      cover: user.cover || "",
-      followingCount: user.followingCount || 0,
-      followersCount: user.followersCount || 0,
-      postsCount: user.postsCount || 0,
-    });
+    if (
+      profile.username !== user.username ||
+      profile.email !== user.email ||
+      profile.name !== (user.fullName || user.name)
+    ) {
+      Object.assign(profile, {
+        _id: userId,
+        id: userId,
+        username: user.username,
+        email: user.email,
+        name: user.fullName || user.name || user.username,
+        fullName: user.fullName || user.name || "",
+        avatar: user.avatar || "/default-avatar.svg",
+        fallbackAvatar: user.avatar || "/default-avatar.svg",
+        emailVerified: user.emailVerified === true,
+        isPrivate: user.isPrivate === true,
+        bio: user.bio || "",
+        website: user.website || "",
+        location: user.location || "",
+        pronouns: user.pronouns || "",
+        cover: user.cover || "",
+        followingCount: user.followingCount || 0,
+        followersCount: user.followersCount || 0,
+        postsCount: user.postsCount || 0,
+      });
+      changed = true;
+    }
 
     const initializeMap = (mapName, value) => {
       if (!this.data[mapName]) this.data[mapName] = {};
       if (!Object.prototype.hasOwnProperty.call(this.data[mapName], userId)) {
         this.data[mapName][userId] = value;
+        changed = true;
       }
     };
 
@@ -2108,7 +2460,9 @@ class PersistentStore {
     initializeMap("userHighlights", []);
     initializeMap("userNotes", null);
     initializeMap("userSettings", this.createDefaultUserSettings(profile));
-    this.saveData();
+    if (changed) {
+      this.saveData();
+    }
     return profile;
   }
 

@@ -70,7 +70,7 @@ const initiateRegistration = async ({ fullName, username, email, passwordHash })
         sentAt: { $lte: new Date(now.getTime() - RESEND_COOLDOWN_MS) },
       },
       { $set: challenge },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
+      { returnDocument: "after", upsert: true, setDefaultsOnInsert: true }
     ).select("_id");
   } catch (error) {
     if (error.code === 11000) {
@@ -140,7 +140,7 @@ const initiatePasswordResetOTP = async ({ email }) => {
         sentAt: { $lte: new Date(now.getTime() - RESEND_COOLDOWN_MS) },
       },
       { $set: challenge },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
+      { returnDocument: "after", upsert: true, setDefaultsOnInsert: true }
     ).select("_id");
   } catch (error) {
     if (error.code === 11000) {
@@ -212,7 +212,7 @@ const verifyOTP = async ({ email, otp, purpose }) => {
     const updated = await RegistrationChallenge.findOneAndUpdate(
       { _id: pending._id, attempts: { $lt: MAX_ATTEMPTS } },
       { $inc: { attempts: 1 } },
-      { new: true }
+      { returnDocument: "after" }
     );
     if (updated?.attempts >= MAX_ATTEMPTS) {
       await RegistrationChallenge.deleteOne({ _id: updated._id });

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { X, Search, Check, UserPlus } from "lucide-react";
 
 export default function FollowersModal({
@@ -10,9 +11,17 @@ export default function FollowersModal({
   onClose,
   onToggleFollow,
 }) {
+  const navigate = useNavigate();
   const [tab, setTab] = useState(initialTab);
   const [search, setSearch] = useState("");
   const [followMap, setFollowMap] = useState({});
+
+  useEffect(() => {
+    if (isOpen) {
+      setTab(initialTab);
+      setSearch("");
+    }
+  }, [isOpen, initialTab]);
 
   if (!isOpen) return null;
 
@@ -111,7 +120,13 @@ export default function FollowersModal({
                   key={u.id || u.username}
                   className="flex items-center justify-between rounded-2xl bg-white p-2.5 border border-[#ece8de]/50 shadow-2xs hover:bg-[#faf8f4] transition"
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
+                  <div
+                    onClick={() => {
+                      onClose();
+                      navigate(`/u/${u.username}`);
+                    }}
+                    className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                  >
                     <img
                       src={u.avatar || "/default-avatar.svg"}
                       alt={u.name}
@@ -121,7 +136,7 @@ export default function FollowersModal({
                       className="h-10 w-10 rounded-full object-cover ring-1 ring-black/5 shrink-0"
                     />
                     <div className="min-w-0">
-                      <span className="text-[13px] font-semibold text-[#18181b] block truncate">
+                      <span className="text-[13px] font-semibold text-[#18181b] block truncate hover:underline">
                         {u.name}
                       </span>
                       <span className="text-[11.5px] text-[#71717a] block truncate">
@@ -135,27 +150,32 @@ export default function FollowersModal({
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleToggle(u)}
-                    className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition active:scale-95 ${
-                      isFollowing
-                        ? "bg-[#edeae3] text-neutral-800 hover:bg-[#e2ded5]"
-                        : "bg-[#1863dc] text-white hover:bg-[#1557be]"
-                    }`}
-                  >
-                    {isFollowing ? (
-                      <>
-                        <Check className="h-3 w-3" />
-                        <span>Following</span>
-                      </>
-                    ) : (
-                      <>
-                        <UserPlus className="h-3 w-3" />
-                        <span>Follow</span>
-                      </>
-                    )}
-                  </button>
+                  {!u.isSelf && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggle(u);
+                      }}
+                      className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition active:scale-95 cursor-pointer shrink-0 ${
+                        isFollowing
+                          ? "bg-[#edeae3] text-neutral-800 hover:bg-[#e2ded5]"
+                          : "bg-black text-white hover:bg-neutral-800"
+                      }`}
+                    >
+                      {isFollowing ? (
+                        <>
+                          <Check className="h-3 w-3" />
+                          <span>Following</span>
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="h-3 w-3" />
+                          <span>Follow</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               );
             })

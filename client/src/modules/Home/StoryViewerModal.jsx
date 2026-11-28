@@ -7,35 +7,13 @@ export default function StoryViewerModal({ stories, initialIndex = 0, onClose, o
   const [progress, setProgress] = useState(0);
   const [replyText, setReplyText] = useState("");
   const [isLiked, setIsLiked] = useState(false);
+  const videoRef = useRef(null);
+  const progressRef = useRef(0);
 
   const activeStory = stories[currentIndex] || stories[0];
   const isOwner = activeStory?.isYours || activeStory?.name === currentUser?.username || activeStory?.name === "Your story";
 
   const STORY_DURATION = 5000; // 5 seconds per story
-
-  useEffect(() => {
-    setProgress(0);
-    setIsLiked(false);
-  }, [currentIndex]);
-
-  useEffect(() => {
-    if (!activeStory || isPaused) return;
-
-    const interval = 50; // update progress every 50ms
-    const step = (interval / STORY_DURATION) * 100;
-
-    const timer = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          handleNext();
-          return 0;
-        }
-        return prev + step;
-      });
-    }, interval);
-
-    return () => clearInterval(timer);
-  }, [currentIndex, isPaused, stories.length]);
 
   const handleNext = () => {
     if (currentIndex < stories.length - 1) {
@@ -50,6 +28,54 @@ export default function StoryViewerModal({ stories, initialIndex = 0, onClose, o
       setCurrentIndex((prev) => prev - 1);
     }
   };
+
+  useEffect(() => {
+    progressRef.current = 0;
+    setProgress(0);
+    setIsLiked(false);
+    setIsPaused(false);
+  }, [currentIndex]);
+
+  // Sync video playback with pause/resume state
+  useEffect(() => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    if (isPaused) {
+      vid.pause();
+    } else {
+      vid.play().catch(() => {});
+    }
+  }, [isPaused, currentIndex]);
+
+  // Cleanup media on unmount
+  useEffect(() => {
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.src = "";
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activeStory || isPaused) return;
+
+    const interval = 50; // update progress every 50ms
+    const step = (interval / STORY_DURATION) * 100;
+
+    const timer = setInterval(() => {
+      progressRef.current = Math.min(100, progressRef.current + step);
+      setProgress(progressRef.current);
+    }, interval);
+
+    return () => clearInterval(timer);
+  }, [currentIndex, isPaused, activeStory]);
+
+  useEffect(() => {
+    if (progress >= 100) {
+      handleNext();
+    }
+  }, [progress]);
 
   const handleSendReply = (e) => {
     e.preventDefault();
@@ -73,10 +99,6 @@ export default function StoryViewerModal({ stories, initialIndex = 0, onClose, o
       {/* Main Story Container */}
       <div
         className="relative flex h-full max-h-[820px] w-full max-w-[420px] flex-col justify-between overflow-hidden rounded-2xl bg-neutral-900 shadow-2xl"
-        onMouseDown={() => setIsPaused(true)}
-        onMouseUp={() => setIsPaused(false)}
-        onTouchStart={() => setIsPaused(true)}
-        onTouchEnd={() => setIsPaused(false)}
       >
         {/* Top Progress Bars */}
         <div className="absolute top-3 inset-x-3 z-30 flex items-center gap-1.5">
@@ -138,6 +160,7 @@ export default function StoryViewerModal({ stories, initialIndex = 0, onClose, o
         <div className="relative h-full w-full bg-neutral-950 flex items-center justify-center">
           {activeStory.mediaUrl?.endsWith(".mp4") || activeStory.mediaUrl?.includes("video") || activeStory.type === "video" ? (
             <video
+              ref={videoRef}
               src={activeStory.mediaUrl}
               autoPlay
               loop
@@ -153,14 +176,26 @@ export default function StoryViewerModal({ stories, initialIndex = 0, onClose, o
             />
           )}
 
-          {/* Touch navigation zones */}
+          {/* Touch navigation & center pause/resume zones */}
           <div
             onClick={handlePrev}
-            className="absolute left-0 top-16 bottom-28 w-1/3 cursor-pointer z-20"
+            className="absolute left-0 top-16 bottom-28 w-1/4 cursor-pointer z-20"
           />
           <div
+            onClick={() => setIsPaused((prev) => !prev)}
+            title={isPaused ? "Tap to resume" : "Tap to pause"}
+            className="absolute left-1/4 right-1/4 top-16 bottom-28 cursor-pointer z-20 flex items-center justify-center"
+          >
+            {isPaused && (
+              <div className="rounded-full bg-black/55 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur-md flex items-center gap-1.5 shadow-lg">
+                <Pause className="h-3.5 w-3.5" />
+                <span>Paused</span>
+              </div>
+            )}
+          </div>
+          <div
             onClick={handleNext}
-            className="absolute right-0 top-16 bottom-28 w-1/3 cursor-pointer z-20"
+            className="absolute right-0 top-16 bottom-28 w-1/4 cursor-pointer z-20"
           />
 
           {/* Story Caption */}
@@ -194,6 +229,8 @@ export default function StoryViewerModal({ stories, initialIndex = 0, onClose, o
               <input
                 type="text"
                 value={replyText}
+                onFocus={() => setIsPaused(true)}
+                onBlur={() => setIsPaused(false)}
                 onChange={(e) => setReplyText(e.target.value)}
                 placeholder={`Reply to ${activeStory.name}...`}
                 className="w-full bg-transparent text-[13px] text-white placeholder-white/70 outline-none"

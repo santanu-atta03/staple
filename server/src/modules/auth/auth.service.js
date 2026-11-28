@@ -184,7 +184,7 @@ const refreshSession = async (oldToken) => {
     {
       $set: { refreshTokenHash: hashToken(newRefreshToken), expiresAt },
     },
-    { new: true }
+    { returnDocument: "after" }
   );
   if (!session) {
     const error = new Error("INVALID_REFRESH_TOKEN");

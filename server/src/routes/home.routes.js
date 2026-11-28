@@ -359,15 +359,20 @@ router.post("/sidebar/join-group/:groupId", (req, res) => {
   res.json({ success: true, group });
 });
 
-// SEARCH
+// SEARCH PEOPLE
+router.get("/search/people", (req, res) => {
+  const { q = "" } = req.query;
+  const userId = req.user?._id || req.user?.id;
+  const people = store.searchUsers(q, userId);
+  res.json({ success: true, count: people.length, people });
+});
+
+// SEARCH (Posts + People)
 router.get("/search", (req, res) => {
   const { q = "" } = req.query;
-  const posts = store.getFeed("for-you", q, req.user.id);
-  const people = store.people.filter(
-    (p) =>
-      p.name.toLowerCase().includes(q.toLowerCase()) ||
-      p.username.toLowerCase().includes(q.toLowerCase())
-  );
+  const userId = req.user?._id || req.user?.id;
+  const posts = store.getFeed("for-you", q, userId);
+  const people = store.searchUsers(q, userId);
   res.json({ success: true, query: q, posts, people });
 });
 

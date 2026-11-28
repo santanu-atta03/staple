@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   Search,
   Plus,
@@ -30,6 +30,7 @@ import {
   Forward,
 } from "lucide-react";
 import { useSocket } from "../../context/SocketContext";
+import { useAuth } from "../../context/AuthContext";
 import {
   fetchConversations,
   fetchNotes,
@@ -55,6 +56,9 @@ import ForwardModal from "./ForwardModal";
 
 export default function MessagePage() {
   const { socket } = useSocket();
+  const { user: authUser } = useAuth();
+  const currentUserId = (authUser?._id || authUser?.id || "").toString();
+  const location = useLocation();
 
   // Navigation / Filter State
   const [activeTab, setActiveTab] = useState("all");
@@ -126,6 +130,25 @@ export default function MessagePage() {
   useEffect(() => {
     loadInitialData();
   }, [activeTab]);
+
+  // Auto-open conversation if navigated from a user's profile
+  useEffect(() => {
+    const targetConvId = location.state?.conversationId;
+    if (!targetConvId) return;
+    setActiveContactId(targetConvId);
+    setMobileActiveChat(true);
+    if (!conversations.some((c) => c.id === targetConvId)) {
+      fetchConversation(targetConvId)
+        .then((conv) => {
+          if (conv) {
+            setConversations((prev) =>
+              prev.some((c) => c.id === conv.id) ? prev : [conv, ...prev]
+            );
+          }
+        })
+        .catch(() => {});
+    }
+  }, [location.state?.conversationId, conversations.length]);
 
   // Debounced search
   useEffect(() => {
@@ -221,8 +244,12 @@ export default function MessagePage() {
       );
     };
 
-    const handleNotesUpdated = ({ notes: updatedNotes }) => {
-      if (updatedNotes) setNotes(updatedNotes);
+    const handleNotesUpdated = ({ notes: updatedNotes, userId: updatedUserId }) => {
+      if (updatedNotes && (!updatedUserId || updatedUserId === currentUserId)) {
+        setNotes(updatedNotes);
+      } else {
+        fetchNotes().then((data) => setNotes(data || [])).catch(() => {});
+      }
     };
 
     socket.on("message:received", handleMessageReceived);
@@ -269,7 +296,10 @@ export default function MessagePage() {
         container.scrollHeight - container.scrollTop - container.clientHeight < 160;
       const lastMsg = msgs[msgs.length - 1];
 
-      if (lastMsg?.sender === "me" || isNearBottom) {
+      const isMyLastMsg = lastMsg?.senderId
+        ? String(lastMsg.senderId) === currentUserId
+        : lastMsg?.sender === "me";
+      if (isMyLastMsg || isNearBottom) {
         container.scrollTo({
           top: container.scrollHeight,
           behavior: "smooth",
@@ -300,6 +330,7 @@ export default function MessagePage() {
     const tempMsg = {
       id: `temp_${Date.now()}`,
       sender: "me",
+      senderId: currentUserId,
       time: new Date().toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
@@ -959,7 +990,9 @@ export default function MessagePage() {
 
               {/* Messages Loop */}
               {(currentChat.messages || []).map((msg) => {
-                const isMe = msg.sender === "me";
+                const isMe = msg.senderId
+                  ? String(msg.senderId) === currentUserId
+                  : msg.sender === "me";
 
                 // Action Toolbar Helper Component
                 const actionToolbar = (

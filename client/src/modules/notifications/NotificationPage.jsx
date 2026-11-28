@@ -33,8 +33,11 @@ import {
   toggleSuggestedFriend,
 } from "./notification.api";
 import DeleteNotificationModal from "./DeleteNotificationModal";
+import { toggleFollowUser } from "../users/profile.api";
+import { useSocket } from "../../context/SocketContext";
 
 export default function NotificationPage() {
+  const { setUnreadCount: setSocketUnreadCount } = useSocket();
   const [activeTab, setActiveTab] = useState("all");
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -244,13 +247,13 @@ export default function NotificationPage() {
 
     try {
       await respondNotificationFriendRequest(id, action);
-      showToast(status === "confirmed" ? "Friend request accepted" : "Friend request removed");
+      showToast(status === "confirmed" ? "Follow request accepted" : "Follow request removed");
     } catch (err) {
-      console.error("Failed to respond to friend request:", err);
+      console.error("Failed to respond to follow request:", err);
     }
   };
 
-  // Handler: Sidebar Friend Request Action
+  // Handler: Sidebar Follow Request Action
   const handleSidebarFriendAction = async (id, action) => {
     const status = action === "accept" || action === "confirmed" ? "confirmed" : "deleted";
 
@@ -263,9 +266,9 @@ export default function NotificationPage() {
 
     try {
       await respondSidebarFriendRequest(id, action);
-      showToast(status === "confirmed" ? "Friend request accepted" : "Friend request removed");
+      showToast(status === "confirmed" ? "Follow request accepted" : "Follow request removed");
     } catch (err) {
-      console.error("Failed to update sidebar friend request:", err);
+      console.error("Failed to update sidebar follow request:", err);
     }
   };
 
@@ -299,9 +302,9 @@ export default function NotificationPage() {
 
     try {
       const res = await toggleSuggestedFriend(id);
-      showToast(res.status === "added" ? "Friend request sent" : "Request cancelled");
+      showToast(res.status === "added" ? "Follow request sent" : "Request cancelled");
     } catch (err) {
-      console.error("Failed to toggle suggested friend:", err);
+      console.error("Failed to toggle suggested follow:", err);
     }
   };
 
@@ -311,7 +314,7 @@ export default function NotificationPage() {
     { key: "likes", label: "Likes & Reactions" },
     { key: "comments", label: "Comments" },
     { key: "mentions", label: "Mentions & Tags" },
-    { key: "friends", label: "Friend Requests" },
+    { key: "friends", label: "Followers" },
   ];
 
   const todayItems = items.filter((i) => i.section === "today");
@@ -600,6 +603,64 @@ export default function NotificationPage() {
                               </div>
                             )}
 
+                            {/* Card: Follow Notification */}
+                            {item.type === "follow" && (
+                              <div>
+                                <p className="text-[13.5px] sm:text-[14.5px] leading-snug text-[#1b1c19]">
+                                  <Link
+                                    to={`/u/${item.user}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="font-semibold hover:underline"
+                                  >
+                                    {item.titlePrefix || item.userName || item.user}
+                                  </Link>{" "}
+                                  started following you.
+                                </p>
+                                <span className="block mt-0.5 text-xs text-[#93939f]">
+                                  {item.subtext || item.time}
+                                </span>
+                                <div className="mt-2.5 flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        const res = await toggleFollowUser(item.user);
+                                        setItems((prev) =>
+                                          prev.map((it) =>
+                                            it.id === item.id
+                                              ? { ...it, isFollowingBack: res.isFollowing, isRead: true }
+                                              : it
+                                          )
+                                        );
+                                        showToast(
+                                          res.isFollowing
+                                            ? `Following @${item.user}`
+                                            : `Unfollowed @${item.user}`
+                                        );
+                                      } catch {
+                                        showToast("Could not update follow status");
+                                      }
+                                    }}
+                                    className={`rounded-full px-4 py-1.5 text-xs font-semibold transition active:scale-95 cursor-pointer ${
+                                      item.isFollowingBack
+                                        ? "bg-[#f0eee9] text-[#1b1c19] hover:bg-[#e4e2dd]"
+                                        : "bg-black text-white hover:bg-neutral-800 shadow-2xs"
+                                    }`}
+                                  >
+                                    {item.isFollowingBack ? "Following" : "Follow Back"}
+                                  </button>
+                                  <Link
+                                    to={`/u/${item.user}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="rounded-full bg-[#f0eee9] px-3.5 py-1.5 text-xs font-medium text-[#47464b] hover:bg-[#e4e2dd] transition"
+                                  >
+                                    View Profile
+                                  </Link>
+                                </div>
+                              </div>
+                            )}
+
                             {/* Card: Friend Request */}
                             {item.type === "friends" && (
                               <div>
@@ -816,7 +877,7 @@ export default function NotificationPage() {
         {/* RIGHT SIDEBAR COLUMN: Widgets (Col span: 4) - FIXED & STICKY, NO SCROLL   */}
         {/* ========================================================================= */}
         <aside className="hidden lg:flex lg:col-span-4 flex-col gap-5 sticky top-0 h-screen overflow-hidden pt-2 sm:pt-4 pb-6">
-          {/* Widget 1: Friend Requests */}
+          {/* Widget 1: Follow Requests */}
           <div className="rounded-3xl bg-white p-5 shadow-xs border border-[#ece8de]/70 flex flex-col gap-3.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -824,12 +885,12 @@ export default function NotificationPage() {
                   <UserPlus className="h-5 w-5 stroke-[2.2]" />
                 </span>
                 <h2 className="text-[16px] font-bold text-[#1b1c19]">
-                  Friend Requests
+                  Follow Requests
                 </h2>
               </div>
               <button
                 type="button"
-                onClick={() => showToast("All friend requests synced")}
+                onClick={() => showToast("All follow requests synced")}
                 className="font-mono text-xs font-semibold text-[#1863dc] hover:underline"
               >
                 See All
